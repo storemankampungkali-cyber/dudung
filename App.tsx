@@ -4,13 +4,13 @@ import {
   LayoutDashboard, PackagePlus, PackageMinus, ClipboardCheck, History, Truck, 
   ShieldCheck, LogOut, Menu, User as UserIcon, Bell, Search, RefreshCw, Plus, 
   Trash2, Save, X, FileDown, CheckCircle2, Info, XCircle, AlertTriangle, 
-  TrendingUp, Activity, Box, Edit2, Filter, Database, Link as LinkIcon,
-  MessageCircle, Send
+  TrendingUp, Activity, Box, Edit2, Filter as FilterIcon, Database, Link as LinkIcon,
+  MessageCircle, Send, ChevronDown, Calendar, RotateCcw, Sparkles
 } from 'lucide-react';
 import { Role, User, Transaction, Product, Supplier, StockState } from './types';
 import { TAB_CONFIG } from './constants';
 import { warehouseService } from './services/warehouseService';
-import { geminiService } from './services/geminiService';
+import { geminiService, ChatHistoryItem } from './services/geminiService';
 
 // --- Shared Components ---
 
@@ -60,6 +60,86 @@ const Input = React.forwardRef(({ label, icon: Icon, ...props }: any, ref: any) 
     </div>
   </div>
 ));
+
+/**
+ * ProductAutocomplete Component with Search Functionality
+ */
+const ProductAutocomplete = ({ products, value, onChange, label }: { products: Product[], value: string, onChange: (p: Product | null) => void, label: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filteredProducts = useMemo(() => {
+    if (!search) return products;
+    const s = search.toLowerCase();
+    return products.filter(p => 
+      p.kode.toLowerCase().includes(s) || 
+      p.nama.toLowerCase().includes(s)
+    );
+  }, [products, search]);
+
+  const selectedProduct = useMemo(() => products.find(p => p.kode === value), [products, value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="w-full relative" ref={wrapperRef}>
+      <label className="block text-[10px] uppercase font-black text-slate-500 mb-1.5 ml-1">{label}</label>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-2 text-slate-200 cursor-pointer flex justify-between items-center hover:border-white/20 transition-all min-h-[42px]"
+      >
+        <span className={selectedProduct ? 'text-slate-200 truncate pr-4' : 'text-slate-500 truncate pr-4'}>
+          {selectedProduct ? `${selectedProduct.kode} - ${selectedProduct.nama}` : '-- Pilih SKU / Cari Barang --'}
+        </span>
+        <ChevronDown size={16} className={`transition-transform duration-300 shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-2 z-[300] glass-panel border border-white/10 rounded-2xl p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input 
+              autoFocus
+              className="w-full bg-white/5 border border-white/5 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-200 focus:outline-none"
+              placeholder="Ketik kode atau nama barang..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
+            <div 
+              onClick={() => { onChange(null); setIsOpen(false); setSearch(''); }}
+              className={`p-3 rounded-xl cursor-pointer transition-all flex items-center gap-2 ${!value ? 'bg-blue-600/20 text-blue-400' : 'hover:bg-white/5 text-slate-500'}`}
+            >
+              <RotateCcw size={12}/>
+              <span className="text-xs font-bold uppercase tracking-widest">Semua Produk</span>
+            </div>
+            {filteredProducts.length === 0 && search && <p className="text-center py-4 text-xs text-slate-500">Barang tidak ditemukan</p>}
+            {filteredProducts.map(p => (
+              <div 
+                key={p.kode} 
+                onClick={() => { onChange(p); setIsOpen(false); setSearch(''); }}
+                className={`p-3 rounded-xl cursor-pointer transition-all flex flex-col gap-0.5 ${value === p.kode ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-slate-300'}`}
+              >
+                <span className={`text-[10px] font-black uppercase ${value === p.kode ? 'text-blue-100' : 'text-blue-400'}`}>{p.kode}</span>
+                <span className="text-xs font-bold">{p.nama}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Card = ({ children, title, icon: Icon, className = "", subtitle = "" }: any) => (
   <div className={`glass-panel p-6 rounded-[2rem] flex flex-col gap-4 border border-white/10 ${className}`}>
@@ -151,7 +231,7 @@ function DashboardView({ stock, products, transactions, insights }: any) {
 }
 
 function ChatView() {
-  const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
+  const [messages, setMessages] = useState<ChatHistoryItem[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -160,50 +240,104 @@ function ChatView() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  const onSend = async (e: any) => {
+  const onSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
-    const userMsg = input.trim();
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    const userText = input.trim();
+    const newUserMsg: ChatHistoryItem = { role: 'user', parts: [{ text: userText }] };
+    
+    // Add user message to UI immediately
+    setMessages(prev => [...prev, newUserMsg]);
     setInput('');
     setLoading(true);
 
-    const response = await geminiService.chat(userMsg);
-    setMessages(prev => [...prev, { role: 'model', text: response || "Maaf, AI sedang tidak dapat merespons." }]);
+    // Call Gemini with current history
+    const response = await geminiService.chat(userText, messages);
+    
+    if (response) {
+      const modelMsg: ChatHistoryItem = { role: 'model', parts: [{ text: response }] };
+      setMessages(prev => [...prev, modelMsg]);
+    }
     setLoading(false);
   };
 
+  const clearChat = () => {
+    if (confirm('Bersihkan semua riwayat percakapan?')) {
+      setMessages([]);
+    }
+  };
+
   return (
-    <div className="h-[calc(100vh-180px)] flex flex-col gap-4">
-      <Card title="AI Assistant General" icon={MessageCircle} subtitle="Kecerdasan Buatan Terintegrasi" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+    <div className="h-[calc(100vh-180px)] flex flex-col gap-4 max-w-5xl mx-auto">
+      <Card 
+        title="AI Assistant General" 
+        icon={MessageCircle} 
+        subtitle="Conversational Intelligence" 
+        className="flex-1 flex flex-col min-h-0 overflow-hidden relative"
+      >
+        <button 
+          onClick={clearChat}
+          className="absolute top-6 right-6 p-2 text-slate-500 hover:text-rose-400 transition-colors"
+          title="Clear Conversation"
+        >
+          <RotateCcw size={16} />
+        </button>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-4 custom-scrollbar">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4 opacity-40">
-              <MessageCircle size={64} />
-              <p className="text-sm font-medium">Apa yang ingin Anda tanyakan hari ini?</p>
+            <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-6 opacity-30 animate-in fade-in duration-700">
+              <div className="p-8 rounded-full bg-white/5 border border-white/5 relative">
+                <Sparkles size={64} className="text-blue-400 animate-pulse" />
+              </div>
+              <div className="text-center space-y-2">
+                <p className="text-lg font-black uppercase tracking-widest">Selamat Datang di Wareflow AI</p>
+                <p className="text-xs font-medium max-w-xs leading-relaxed">Saya adalah asisten cerdas Anda. Tanyakan apa saja, mulai dari bantuan gudang hingga diskusi umum.</p>
+              </div>
             </div>
           )}
+          
           {messages.map((m, idx) => (
             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-              <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/5 border border-white/10 text-slate-200'}`}>
-                {m.text}
+              <div className={`max-w-[85%] p-4 rounded-3xl text-sm leading-relaxed shadow-xl ${
+                m.role === 'user' 
+                  ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-tr-sm border border-blue-400/20' 
+                  : 'bg-white/5 border border-white/10 text-slate-200 rounded-tl-sm backdrop-blur-md'
+              }`}>
+                <div className="flex items-center gap-2 mb-2 opacity-40">
+                   {m.role === 'user' ? <UserIcon size={12}/> : <Sparkles size={12} className="text-blue-400"/>}
+                   <span className="text-[9px] font-black uppercase tracking-widest">{m.role === 'user' ? 'Anda' : 'Asisten AI'}</span>
+                </div>
+                <div className="whitespace-pre-wrap">{m.parts[0].text}</div>
               </div>
             </div>
           ))}
+
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-2">
+            <div className="flex justify-start animate-in fade-in">
+              <div className="bg-white/5 border border-white/10 p-4 rounded-3xl rounded-tl-sm flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" />
-                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.2s]" />
-                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.4s]" />
               </div>
             </div>
           )}
         </div>
-        <form onSubmit={onSend} className="mt-4 flex gap-2">
-          <Input placeholder="Tulis pertanyaan umum di sini..." value={input} onChange={(e: any) => setInput(e.target.value)} />
-          <Button type="submit" disabled={loading} className="px-6 h-[42px]"><Send size={18}/></Button>
+
+        <form onSubmit={onSend} className="mt-6 flex gap-3 items-center">
+          <div className="flex-1 relative">
+            <Input 
+              placeholder="Ketik pesan atau tanyakan sesuatu..." 
+              value={input} 
+              onChange={(e: any) => setInput(e.target.value)}
+              className="!py-3 !px-6 !rounded-2xl !bg-white/5"
+              autoFocus
+              disabled={loading}
+            />
+          </div>
+          <Button type="submit" disabled={loading || !input.trim()} className="h-12 w-12 !rounded-2xl flex-shrink-0">
+            <Send size={20}/>
+          </Button>
         </form>
       </Card>
     </div>
@@ -287,28 +421,16 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
 
   const saveSku = async (e: any) => {
     e.preventDefault();
-    const isNew = !modal.editing;
-    const finalProduct = { ...modal.data, minStok: Number(modal.data.minStok) };
-    delete finalProduct.stokAwal; // Don't save this in product metadata
+    const finalProduct = { 
+      ...modal.data, 
+      minStok: Number(modal.data.minStok || 0),
+      stokAwal: Number(modal.data.stokAwal || 0)
+    };
     
     await warehouseService.saveProduct(finalProduct);
-    
-    if (isNew && modal.data.stokAwal > 0) {
-      await warehouseService.saveTransaction({
-        tgl: new Date().toISOString().split('T')[0],
-        jenis: 'AWAL',
-        kode: modal.data.kode,
-        nama: modal.data.nama,
-        qty: parseFloat(modal.data.stokAwal),
-        satuan: modal.data.satuanDefault,
-        displayQty: parseFloat(modal.data.stokAwal),
-        user: currentUser.username,
-        keterangan: 'Input Saldo Awal SKU Baru'
-      });
-    }
-
     toast(`Master SKU ${modal.data.kode} disimpan`, 'success');
-    setModal({ open: false, editing: null, data: {} }); refresh();
+    setModal({ open: false, editing: null, data: {} }); 
+    refresh();
   };
 
   return (
@@ -400,7 +522,8 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
                     <Input label="Satuan Dasar" value={modal.data.satuanDefault || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, satuanDefault: e.target.value}})} required />
                     <Input label="Min Stok" type="number" value={modal.data.minStok || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, minStok: e.target.value}})} required />
                   </div>
-                  {!modal.editing && <Input label="Saldo Awal Sistem" type="number" value={modal.data.stokAwal || 0} onChange={(e:any)=>setModal({...modal, data: {...modal.data, stokAwal: e.target.value}})} />}
+                  <Input label="Stok Awal di Gudang" type="number" value={modal.data.stokAwal || 0} onChange={(e:any)=>setModal({...modal, data: {...modal.data, stokAwal: e.target.value}})} />
+                  <p className="text-[10px] text-slate-500 italic">Nilai ini digunakan sebagai saldo pembuka saat menghitung total stok.</p>
                 </>
               )}
               <div className="flex justify-end gap-3 pt-6"><button type="button" onClick={() => setModal({ open: false, editing: null, data: {} })} className="text-slate-500 font-bold px-4">Batal</button><Button type="submit" variant="success">Simpan Data</Button></div>
@@ -412,9 +535,6 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
   );
 }
 
-// --- Missing View Components ---
-
-// Fix for missing TransactionView
 function TransactionView({ type, products, suppliers, stock, user, refresh, toast }: any) {
   const [formData, setFormData] = useState({
     kode: '',
@@ -426,7 +546,7 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
     keterangan: ''
   });
 
-  const selectedProduct = products.find((p: any) => p.kode === formData.kode);
+  const selectedProduct = useMemo(() => products.find((p: any) => p.kode === formData.kode), [products, formData.kode]);
   const currentStock = stock[formData.kode] || 0;
 
   const handleSubmit = async (e: any) => {
@@ -439,7 +559,6 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
     const qtyNum = parseFloat(formData.qty);
     let displayQty = qtyNum;
     
-    // Simple conversion logic based on Product metadata
     if (selectedProduct) {
       if (formData.satuan === selectedProduct.satuanAlt1) {
         displayQty = qtyNum * (selectedProduct.konversiAlt1 || 1);
@@ -472,23 +591,12 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
     <Card title={`Transaksi ${type}`} icon={type === 'MASUK' ? PackagePlus : type === 'KELUAR' ? PackageMinus : ClipboardCheck}>
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <div className="w-full">
-            <label className="block text-[10px] uppercase font-black text-slate-500 mb-1.5 ml-1">Pilih Barang</label>
-            <select 
-              className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 text-slate-200"
-              value={formData.kode}
-              onChange={(e) => {
-                const p = products.find((x:any) => x.kode === e.target.value);
-                setFormData({...formData, kode: e.target.value, satuan: p?.satuanDefault || ''});
-              }}
-              required
-            >
-              <option value="">-- Pilih SKU --</option>
-              {products.map((p: any) => (
-                <option key={p.kode} value={p.kode}>{p.kode} - {p.nama}</option>
-              ))}
-            </select>
-          </div>
+          <ProductAutocomplete 
+            label="Pilih Barang (SKU / Nama)"
+            products={products}
+            value={formData.kode}
+            onChange={(p) => setFormData({...formData, kode: p ? p.kode : '', satuan: p ? p.satuanDefault : ''})}
+          />
           
           {selectedProduct && (
             <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-2">
@@ -506,7 +614,7 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
             <div className="w-full">
               <label className="block text-[10px] uppercase font-black text-slate-500 mb-1.5 ml-1">Satuan</label>
               <select 
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 text-slate-200"
+                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-2 text-slate-200 focus:outline-none focus:border-cyan-500"
                 value={formData.satuan}
                 onChange={(e) => setFormData({...formData, satuan: e.target.value})}
                 required
@@ -529,7 +637,7 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
               <div className="w-full">
                 <label className="block text-[10px] uppercase font-black text-slate-500 mb-1.5 ml-1">Supplier</label>
                 <select 
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 text-slate-200"
+                  className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-2 text-slate-200 focus:outline-none focus:border-cyan-500"
                   value={formData.supplier}
                   onChange={(e) => setFormData({...formData, supplier: e.target.value})}
                 >
@@ -557,17 +665,36 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
   );
 }
 
-// Fix for missing HistoryView
 function HistoryView({ transactions, products, toast }: any) {
-  const [filter, setFilter] = useState({ search: '', type: '' });
+  const INITIAL_FILTER = { 
+    search: '', 
+    type: '', 
+    startDate: '', 
+    endDate: '', 
+    kode: '' 
+  };
+  const [filter, setFilter] = useState(INITIAL_FILTER);
+  const [isAdvancedVisible, setIsAdvancedVisible] = useState(false);
 
-  const filtered = transactions.filter((t: any) => {
-    const matchesSearch = t.nama.toLowerCase().includes(filter.search.toLowerCase()) || 
+  const filtered = useMemo(() => transactions.filter((t: any) => {
+    const matchesSearch = !filter.search || 
+                         t.nama.toLowerCase().includes(filter.search.toLowerCase()) || 
                          t.kode.toLowerCase().includes(filter.search.toLowerCase()) ||
                          t.keterangan.toLowerCase().includes(filter.search.toLowerCase());
-    const matchesType = filter.type === '' || t.jenis === filter.type;
-    return matchesSearch && matchesType;
-  }).reverse();
+    
+    const matchesType = !filter.type || t.jenis === filter.type;
+    const matchesKode = !filter.kode || t.kode === filter.kode;
+    
+    let matchesDate = true;
+    if (filter.startDate) {
+      matchesDate = matchesDate && t.tgl >= filter.startDate;
+    }
+    if (filter.endDate) {
+      matchesDate = matchesDate && t.tgl <= filter.endDate;
+    }
+
+    return matchesSearch && matchesType && matchesKode && matchesDate;
+  }).reverse(), [transactions, filter]);
 
   const exportCSV = () => {
     const headers = ['ID', 'Tanggal', 'Waktu', 'Jenis', 'Kode', 'Nama', 'Qty', 'Satuan', 'User', 'Keterangan', 'Supplier', 'NoSJ', 'NoPO'];
@@ -588,39 +715,85 @@ function HistoryView({ transactions, products, toast }: any) {
     toast('History diekspor ke CSV', 'success');
   };
 
+  const clearFilters = () => {
+    setFilter(INITIAL_FILTER);
+    toast('Filter dibersihkan', 'info');
+  };
+
+  const activeFilterCount = Object.keys(filter).filter(key => !!filter[key as keyof typeof INITIAL_FILTER]).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <h3 className="text-xl font-black uppercase tracking-tighter text-white">Logistik & Audit Trailing</h3>
-        <div className="flex gap-4 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-            <input 
-              placeholder="Cari SKU / Nama / Ket..." 
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-200 focus:outline-none focus:border-cyan-500"
-              value={filter.search}
-              onChange={(e) => setFilter({...filter, search: e.target.value})}
-            />
-          </div>
-          <select 
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-black uppercase text-slate-200"
-            value={filter.type}
-            onChange={(e) => setFilter({...filter, type: e.target.value})}
-          >
-            <option value="">SEMUA JENIS</option>
-            <option value="MASUK">MASUK</option>
-            <option value="KELUAR">KELUAR</option>
-            <option value="OPNAME">OPNAME</option>
-            <option value="AWAL">SALDO AWAL</option>
-          </select>
+        <div>
+          <h3 className="text-2xl font-black uppercase tracking-tighter text-white">Logistik & Audit Trailing</h3>
+          <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Ditemukan {filtered.length} Transaksi</p>
+        </div>
+        <div className="flex gap-3 w-full md:w-auto">
+          <Button variant="ghost" onClick={() => setIsAdvancedVisible(!isAdvancedVisible)} className={activeFilterCount > 0 ? 'border-cyan-500/50 text-cyan-400' : ''}>
+            <FilterIcon size={18}/> {isAdvancedVisible ? 'Tutup Filter' : 'Filter Lanjut'}
+            {activeFilterCount > 0 && <span className="ml-1 w-5 h-5 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center text-[10px] font-black">{activeFilterCount}</span>}
+          </Button>
           <Button variant="ghost" onClick={exportCSV}><FileDown size={18}/> Export</Button>
         </div>
       </div>
 
-      <Card className="!p-0 overflow-hidden">
+      <div className={`overflow-hidden transition-all duration-500 ${isAdvancedVisible ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+        <Card title="Panel Filter Lanjutan" icon={FilterIcon} className="!bg-white/[0.03] border-cyan-500/10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="space-y-4">
+              <Input 
+                label="Pencarian Bebas" 
+                placeholder="Cari SKU / Nama / Notes..." 
+                icon={Search}
+                value={filter.search}
+                onChange={(e:any) => setFilter({...filter, search: e.target.value})}
+              />
+              <div className="w-full">
+                <label className="block text-[10px] uppercase font-black text-slate-500 mb-1.5 ml-1 tracking-widest">Jenis Transaksi</label>
+                <select 
+                  className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-2 text-xs font-black uppercase text-slate-200 focus:outline-none focus:border-cyan-500"
+                  value={filter.type}
+                  onChange={(e) => setFilter({...filter, type: e.target.value})}
+                >
+                  <option value="">SEMUA JENIS</option>
+                  <option value="MASUK">MASUK</option>
+                  <option value="KELUAR">KELUAR</option>
+                  <option value="OPNAME">OPNAME</option>
+                  <option value="AWAL">SALDO AWAL</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <ProductAutocomplete 
+                label="Filter Spesifik SKU"
+                products={products}
+                value={filter.kode}
+                onChange={(p) => setFilter({...filter, kode: p ? p.kode : ''})}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Dari Tanggal" type="date" value={filter.startDate} onChange={(e:any)=>setFilter({...filter, startDate: e.target.value})} icon={Calendar} />
+                <Input label="Sampai Tanggal" type="date" value={filter.endDate} onChange={(e:any)=>setFilter({...filter, endDate: e.target.value})} icon={Calendar} />
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-end gap-3 pb-0.5">
+              <Button onClick={clearFilters} variant="ghost" className="w-full text-rose-400 border-rose-500/20 hover:bg-rose-500/10">
+                <RotateCcw size={18}/> Bersihkan Filter
+              </Button>
+              <Button onClick={() => setIsAdvancedVisible(false)} variant="primary" className="w-full">
+                Terapkan & Tutup
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="!p-0 overflow-hidden !border-white/5">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="text-[10px] text-slate-500 font-black uppercase border-b border-white/5 bg-white/[0.02]">
+            <thead className="text-[10px] text-slate-500 font-black uppercase border-b border-white/5 bg-white/[0.02] tracking-widest">
               <tr>
                 <th className="p-4">Tanggal / Waktu</th>
                 <th className="p-4">Jenis</th>
@@ -631,11 +804,20 @@ function HistoryView({ transactions, products, toast }: any) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t: any) => (
-                <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.01] transition-colors">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-20 text-center">
+                    <div className="flex flex-col items-center gap-4 opacity-20">
+                      <Search size={48}/>
+                      <p className="text-sm font-bold uppercase tracking-widest">Tidak ada transaksi ditemukan</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filtered.map((t: any) => (
+                <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.01] transition-colors group">
                   <td className="p-4">
                     <p className="font-bold text-slate-200">{t.tgl}</p>
-                    <p className="text-[10px] text-slate-500">{t.waktu}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{t.waktu}</p>
                   </td>
                   <td className="p-4">
                     <Badge variant={t.jenis === 'MASUK' ? 'success' : t.jenis === 'KELUAR' ? 'danger' : t.jenis === 'AWAL' ? 'purple' : 'info'}>
@@ -643,17 +825,29 @@ function HistoryView({ transactions, products, toast }: any) {
                     </Badge>
                   </td>
                   <td className="p-4">
-                    <p className="font-black text-blue-400 text-xs">{t.kode}</p>
+                    <p className="font-black text-blue-400 text-[10px] tracking-wider">{t.kode}</p>
                     <p className="font-bold text-slate-300 truncate max-w-[200px]">{t.nama}</p>
                   </td>
                   <td className="p-4 text-right">
-                    <p className={`font-black ${t.jenis === 'MASUK' ? 'text-emerald-500' : t.jenis === 'KELUAR' ? 'text-rose-500' : 'text-slate-200'}`}>
+                    <p className={`font-black text-base ${t.jenis === 'MASUK' ? 'text-emerald-500' : t.jenis === 'KELUAR' ? 'text-rose-500' : 'text-slate-200'}`}>
                       {t.jenis === 'KELUAR' ? '-' : '+'}{t.displayQty || t.qty}
                     </p>
-                    <p className="text-[9px] text-slate-500 font-bold">{t.satuan}</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter">{t.satuan}</p>
                   </td>
-                  <td className="p-4 text-xs font-bold text-slate-400">{t.user}</td>
-                  <td className="p-4 text-[11px] text-slate-500 italic max-w-xs truncate">{t.keterangan}</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center text-[10px] font-black text-slate-500">
+                        {t.user?.[0]?.toUpperCase()}
+                      </div>
+                      <span className="text-xs font-bold text-slate-400">{t.user}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-[11px] text-slate-500 italic max-w-xs">
+                    <div className="line-clamp-2" title={t.keterangan}>
+                      {t.keterangan || '-'}
+                    </div>
+                    {t.supplier && <p className="text-[9px] text-blue-500/50 not-italic font-bold mt-1 uppercase tracking-tighter">Via: {t.supplier}</p>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -663,8 +857,6 @@ function HistoryView({ transactions, products, toast }: any) {
     </div>
   );
 }
-
-// --- Main App Component ---
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -678,6 +870,9 @@ export default function App() {
   const [stock, setStock] = useState<StockState>({});
   const [aiInsights, setAiInsights] = useState('');
 
+  // Global Caching: Memoized products list to avoid repeated storage parsing across tabs
+  const cachedProducts = useMemo(() => products, [products]);
+
   const showToast = useCallback((message: string, type: string = 'info') => {
     setToasts(prev => [...prev, { id: Date.now().toString(), message, type }]);
   }, []);
@@ -685,7 +880,8 @@ export default function App() {
   const refreshData = useCallback(async () => {
     setIsSyncing(true);
     const success = await warehouseService.syncAll();
-    setProducts(warehouseService.getProducts());
+    const pData = warehouseService.getProducts();
+    setProducts(pData);
     setSuppliers(warehouseService.getSuppliers());
     setTransactions(warehouseService.getTransactions());
     setStock(warehouseService.getStockState());
@@ -709,11 +905,10 @@ export default function App() {
 
   useEffect(() => {
     if (user && activeTab === 'dashboard') {
-      geminiService.getStockInsights(products, stock, transactions).then(setAiInsights);
+      geminiService.getStockInsights(cachedProducts, stock, transactions).then(setAiInsights);
     }
-  }, [activeTab, user, stock, products, transactions]);
+  }, [activeTab, user, stock, cachedProducts, transactions]);
 
-  // Handle Login
   const handleLogin = async (e: any) => {
     e.preventDefault();
     const u = e.target.username.value;
@@ -751,8 +946,6 @@ export default function App() {
   }
 
   const icons: any = { LayoutDashboard, PackagePlus, PackageMinus, ClipboardCheck, History, Truck, ShieldCheck, MessageCircle };
-
-  // Filter tabs based on RBAC
   const availableTabs = Object.keys(TAB_CONFIG).filter(k => TAB_CONFIG[k].roles.includes(user.role));
 
   return (
@@ -788,14 +981,14 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto p-10 custom-scrollbar">
           <div className="max-w-7xl mx-auto pb-20">
-            {activeTab === 'dashboard' && <DashboardView stock={stock} products={products} transactions={transactions} insights={aiInsights} />}
-            {activeTab === 'masuk' && <TransactionView type="MASUK" products={products} suppliers={suppliers} stock={stock} user={user} refresh={refreshData} toast={showToast} />}
-            {activeTab === 'keluar' && <TransactionView type="KELUAR" products={products} suppliers={suppliers} stock={stock} user={user} refresh={refreshData} toast={showToast} />}
-            {activeTab === 'opname' && <TransactionView type="OPNAME" products={products} suppliers={suppliers} stock={stock} user={user} refresh={refreshData} toast={showToast} />}
-            {activeTab === 'riwayat' && <HistoryView transactions={transactions} products={products} toast={showToast} />}
+            {activeTab === 'dashboard' && <DashboardView stock={stock} products={cachedProducts} transactions={transactions} insights={aiInsights} />}
+            {activeTab === 'masuk' && <TransactionView type="MASUK" products={cachedProducts} suppliers={suppliers} stock={stock} user={user} refresh={refreshData} toast={showToast} />}
+            {activeTab === 'keluar' && <TransactionView type="KELUAR" products={cachedProducts} suppliers={suppliers} stock={stock} user={user} refresh={refreshData} toast={showToast} />}
+            {activeTab === 'opname' && <TransactionView type="OPNAME" products={cachedProducts} suppliers={suppliers} stock={stock} user={user} refresh={refreshData} toast={showToast} />}
+            {activeTab === 'riwayat' && <HistoryView transactions={transactions} products={cachedProducts} toast={showToast} />}
             {activeTab === 'supplier' && <SupplierView suppliers={suppliers} refresh={refreshData} toast={showToast} />}
             {activeTab === 'chat' && <ChatView />}
-            {activeTab === 'admin' && <AdminView refresh={refreshData} currentUser={user} toast={showToast} products={products} />}
+            {activeTab === 'admin' && <AdminView refresh={refreshData} currentUser={user} toast={showToast} products={cachedProducts} />}
           </div>
         </main>
       </div>

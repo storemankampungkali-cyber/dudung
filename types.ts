@@ -18,6 +18,7 @@ export interface Product {
   satuanAlt2?: string;
   konversiAlt2?: number;
   minStok: number;
+  stokAwal: number;
 }
 
 export interface Supplier {

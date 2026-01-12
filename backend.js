@@ -90,7 +90,7 @@ function doPost(e) {
  */
 function initSheets(ss) {
   const config = [
-    { name: "Products", headers: ["kode", "nama", "satuanDefault", "satuanAlt1", "konversiAlt1", "satuanAlt2", "konversiAlt2", "minStok"] },
+    { name: "Products", headers: ["kode", "nama", "satuanDefault", "satuanAlt1", "konversiAlt1", "satuanAlt2", "konversiAlt2", "minStok", "stokAwal"] },
     { name: "Suppliers", headers: ["id", "nama", "alamat", "telp", "email", "pic", "ket"] },
     { name: "Transactions", headers: ["id", "tgl", "waktu", "jenis", "nama", "kode", "qty", "satuan", "displayQty", "keterangan", "user", "supplier", "noSJ", "noPO"] },
     { name: "Users", headers: ["username", "password", "role", "active", "lastLogin"] }
@@ -102,6 +102,14 @@ function initSheets(ss) {
       sheet = ss.insertSheet(item.name);
       sheet.appendRow(item.headers);
       sheet.getRange(1, 1, 1, item.headers.length).setFontWeight("bold").setBackground("#f3f3f3");
+    } else {
+      // Pastikan header lengkap jika sheet sudah ada (fitur migrasi kolom baru)
+      const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      item.headers.forEach(h => {
+        if (currentHeaders.indexOf(h) === -1) {
+          sheet.getRange(1, sheet.getLastColumn() + 1).setValue(h).setFontWeight("bold").setBackground("#f3f3f3");
+        }
+      });
     }
   });
 }

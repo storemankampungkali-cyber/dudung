@@ -8,7 +8,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     satuanDefault: 'PCS', 
     satuanAlt1: 'BOX', 
     konversiAlt1: 100,
-    minStok: 100 
+    minStok: 100,
+    // Fix: Added missing stokAwal property
+    stokAwal: 0 
   },
   { 
     kode: 'BRG002', 
@@ -16,7 +18,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     satuanDefault: 'METER', 
     satuanAlt1: 'ROLL', 
     konversiAlt1: 50,
-    minStok: 50 
+    minStok: 50,
+    // Fix: Added missing stokAwal property
+    stokAwal: 0 
   },
   { 
     kode: 'BRG003', 
@@ -24,13 +28,17 @@ export const INITIAL_PRODUCTS: Product[] = [
     satuanDefault: 'PCS', 
     satuanAlt1: 'DUS', 
     konversiAlt1: 24,
-    minStok: 20 
+    minStok: 20,
+    // Fix: Added missing stokAwal property
+    stokAwal: 0 
   },
   { 
     kode: 'BRG004', 
     nama: 'Pipa PVC 1/2 Inch', 
     satuanDefault: 'BATANG', 
-    minStok: 15 
+    minStok: 15,
+    // Fix: Added missing stokAwal property
+    stokAwal: 0 
   },
 ];
 

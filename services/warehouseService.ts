@@ -70,7 +70,9 @@ class WarehouseService {
 
   getProducts(): Product[] {
     const data = localStorage.getItem(this.STORAGE_KEYS.PRODUCTS);
-    return data ? JSON.parse(data) : INITIAL_PRODUCTS;
+    const products: Product[] = data ? JSON.parse(data) : INITIAL_PRODUCTS;
+    // Ensure stokAwal is a number
+    return products.map(p => ({ ...p, stokAwal: Number(p.stokAwal || 0) }));
   }
 
   getSuppliers(): Supplier[] {
@@ -154,13 +156,25 @@ class WarehouseService {
 
   getStockState(): StockState {
     const txs = this.getTransactions();
+    const products = this.getProducts();
     const stock: StockState = {};
-    this.getProducts().forEach(p => { stock[p.kode] = 0; });
+
+    // Inisialisasi stok dengan nilai stokAwal dari metadata produk
+    products.forEach(p => { 
+      stock[p.kode] = Number(p.stokAwal || 0); 
+    });
+
     txs.forEach(tx => {
       const q = Number(tx.qty);
-      if (tx.jenis === 'MASUK' || tx.jenis === 'AWAL') stock[tx.kode] = (stock[tx.kode] || 0) + q;
-      else if (tx.jenis === 'KELUAR') stock[tx.kode] = (stock[tx.kode] || 0) - q;
-      else if (tx.jenis === 'OPNAME') stock[tx.kode] = q;
+      // Jenis 'AWAL' di transaksi tetap dihitung untuk backward compatibility, 
+      // namun sekarang stok awal utama diambil dari properti produk.
+      if (tx.jenis === 'MASUK' || tx.jenis === 'AWAL') {
+        stock[tx.kode] = (stock[tx.kode] || 0) + q;
+      } else if (tx.jenis === 'KELUAR') {
+        stock[tx.kode] = (stock[tx.kode] || 0) - q;
+      } else if (tx.jenis === 'OPNAME') {
+        stock[tx.kode] = q;
+      }
     });
     return stock;
   }
