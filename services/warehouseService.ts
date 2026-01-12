@@ -3,7 +3,7 @@ import { Product, Supplier, Transaction, User, StockState } from '../types';
 import { INITIAL_USERS } from '../constants';
 
 // GANTI URL INI dengan URL Web App Google Apps Script Anda setelah di-deploy
-const BACKEND_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwYhaXthAUa-KeMw_ib64nimRvEhh5-cR3plSMHdaedDBO8a0ViaLLbcBeTYwttphfR0g/exec';
 
 class WarehouseService {
   private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
