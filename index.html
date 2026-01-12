@@ -18,43 +18,38 @@
       overflow: hidden;
     }
     .glass-panel {
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(18px);
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
     .bg-main {
       background: 
-        radial-gradient(1200px 600px at 20% -10%, rgba(26, 92, 255, 0.25), transparent),
-        radial-gradient(900px 500px at 90% 10%, rgba(34, 211, 238, 0.15), transparent),
+        radial-gradient(1200px 600px at 20% -10%, rgba(26, 92, 255, 0.15), transparent),
+        radial-gradient(900px 500px at 90% 10%, rgba(34, 211, 238, 0.1), transparent),
         #070b14;
     }
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.05);
-    }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
   </style>
 <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@^19.2.3",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.474.0"
   }
 }
 </script>
 </head>
-<body class="bg-main h-screen w-screen">
-  <div id="root"></div>
+<body class="bg-main h-screen w-screen overflow-hidden">
+  <div id="root" class="h-full w-full"></div>
+  <!-- CRITICAL: Script tag to load the app -->
+  <script type="module" src="./index.tsx"></script>
 </body>
 </html>
