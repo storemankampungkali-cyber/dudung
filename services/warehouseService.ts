@@ -2,6 +2,7 @@
 import { Product, Supplier, Transaction, User, StockState } from '../types';
 import { INITIAL_USERS, INITIAL_PRODUCTS, INITIAL_SUPPLIERS } from '../constants';
 
+// Pastikan VITE_GAS_URL diisi dengan URL 'Web App' dari Google Apps Script
 const BACKEND_URL = (import.meta as any).env?.VITE_GAS_URL || '';
 
 class WarehouseService {
@@ -13,7 +14,7 @@ class WarehouseService {
   };
 
   private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
-    if (!BACKEND_URL) return { error: "Offline Mode" };
+    if (!BACKEND_URL) return null;
     try {
       const options: RequestInit = {
         method: method,
@@ -21,14 +22,33 @@ class WarehouseService {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }
       };
       if (method === 'POST') options.body = JSON.stringify({ action, data });
-      const response = await fetch(method === 'GET' ? `${BACKEND_URL}?action=${action}` : BACKEND_URL, options);
+      
+      const url = method === 'GET' ? `${BACKEND_URL}?action=${action}` : BACKEND_URL;
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error("API Response Error");
       return await response.json();
     } catch (error) {
-      return { error: "Connection failed" };
+      console.warn("Backend connection failed, using local storage fallback.");
+      return null;
     }
   }
 
-  // GETTERS
+  /**
+   * Mengambil data terbaru dari Spreadsheet
+   */
+  async syncAll() {
+    const cloudData = await this.callApi('get_all', 'GET');
+    if (cloudData) {
+      if (cloudData.products) localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(cloudData.products));
+      if (cloudData.suppliers) localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(cloudData.suppliers));
+      if (cloudData.transactions) localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cloudData.transactions));
+      if (cloudData.users) localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
+      return true;
+    }
+    return false;
+  }
+
+  // GETTERS (Selalu ambil dari LocalStorage sebagai cache/offline source)
   getProducts(): Product[] {
     return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.PRODUCTS) || JSON.stringify(INITIAL_PRODUCTS));
   }
@@ -45,15 +65,18 @@ class WarehouseService {
     return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.USERS) || JSON.stringify(INITIAL_USERS));
   }
 
-  // SETTERS
+  // SETTERS (Update local dulu baru kirim ke cloud)
   async saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>) {
     const newTx = { ...tx, id: `TX-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, waktu: new Date().toLocaleTimeString() };
     const localTxs = this.getTransactions();
     localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify([...localTxs, newTx]));
-    return await this.callApi('save_transaction', 'POST', newTx);
+    
+    // Push ke Spreadsheet secara asinkron
+    await this.callApi('save_transaction', 'POST', newTx);
+    return newTx;
   }
 
-  saveProduct(p: Product) {
+  async saveProduct(p: Product) {
     const products = this.getProducts();
     const exists = products.findIndex(x => x.kode === p.kode);
     let updated;
@@ -64,14 +87,17 @@ class WarehouseService {
       updated = [...products, p];
     }
     localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+    await this.callApi('save_product', 'POST', p);
   }
 
-  deleteProduct(kode: string) {
+  async deleteProduct(kode: string) {
     const products = this.getProducts();
-    localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(products.filter(p => p.kode !== kode)));
+    const updated = products.filter(p => p.kode !== kode);
+    localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+    await this.callApi('delete_product', 'POST', { kode });
   }
 
-  saveSupplier(s: Supplier) {
+  async saveSupplier(s: Supplier) {
     const suppliers = this.getSuppliers();
     const exists = suppliers.findIndex(x => x.id === s.id);
     let updated;
@@ -82,14 +108,16 @@ class WarehouseService {
       updated = [...suppliers, s];
     }
     localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(updated));
+    await this.callApi('save_supplier', 'POST', s);
   }
 
-  deleteSupplier(id: string) {
+  async deleteSupplier(id: string) {
     const suppliers = this.getSuppliers();
     localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers.filter(s => s.id !== id)));
+    await this.callApi('delete_supplier', 'POST', { id });
   }
 
-  saveUser(u: User) {
+  async saveUser(u: User) {
     const users = this.getUsers();
     const exists = users.findIndex(x => x.username === u.username);
     let updated;
@@ -100,11 +128,13 @@ class WarehouseService {
       updated = [...users, u];
     }
     localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(updated));
+    await this.callApi('save_user', 'POST', u);
   }
 
-  deleteUser(username: string) {
+  async deleteUser(username: string) {
     const users = this.getUsers();
     localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(users.filter(u => u.username !== username)));
+    await this.callApi('delete_user', 'POST', { username });
   }
 
   getStockState(): StockState {
@@ -113,9 +143,10 @@ class WarehouseService {
     this.getProducts().forEach(p => { stock[p.kode] = 0; });
     
     txs.forEach(tx => {
-      if (tx.jenis === 'MASUK') stock[tx.kode] = (stock[tx.kode] || 0) + tx.qty;
-      else if (tx.jenis === 'KELUAR') stock[tx.kode] = (stock[tx.kode] || 0) - tx.qty;
-      else if (tx.jenis === 'OPNAME') stock[tx.kode] = tx.qty;
+      const q = Number(tx.qty);
+      if (tx.jenis === 'MASUK') stock[tx.kode] = (stock[tx.kode] || 0) + q;
+      else if (tx.jenis === 'KELUAR') stock[tx.kode] = (stock[tx.kode] || 0) - q;
+      else if (tx.jenis === 'OPNAME') stock[tx.kode] = q;
     });
     return stock;
   }

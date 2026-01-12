@@ -385,7 +385,7 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
                     <p className="text-[10px] opacity-40 uppercase font-mono">{it.kode} {it.conv > 1 ? `(${it.baseQty} Unit Dasar)` : ''}</p>
                   </div>
                 </div>
-                <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="p-2 text-rose-500 hover:bg-rose-500/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
                   <Trash2 size={20}/>
                 </button>
               </div>
@@ -485,21 +485,21 @@ function HistoryView({ transactions, products, toast }: any) {
 function SupplierView({ suppliers, refresh, toast }: any) {
   const [modal, setModal] = useState({ open: false, editing: null as any, data: {} as any });
 
-  const handleSubmit = (e: any) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     const payload = {
       id: modal.editing?.id || `SUP-${Date.now()}`,
       ...modal.data
     };
-    warehouseService.saveSupplier(payload);
+    await warehouseService.saveSupplier(payload);
     toast(`Supplier ${payload.nama} berhasil disimpan!`, 'success');
     setModal({ open: false, editing: null, data: {} });
     refresh();
   };
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
     if (confirm('Apakah Anda yakin ingin menghapus supplier ini?')) {
-      warehouseService.deleteSupplier(id);
+      await warehouseService.deleteSupplier(id);
       toast('Supplier telah dihapus', 'info');
       refresh();
     }
@@ -561,30 +561,30 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
   const [subTab, setSubTab] = useState<'users' | 'skus'>('users');
   const [modal, setModal] = useState({ open: false, editing: null as any, data: {} as any });
 
-  const saveUser = (e: any) => {
+  const saveUser = async (e: any) => {
     e.preventDefault();
-    warehouseService.saveUser(modal.data);
+    await warehouseService.saveUser(modal.data);
     toast(`Informasi User ${modal.data.username} berhasil disimpan`, 'success');
     setModal({ open: false, editing: null, data: {} }); refresh();
   };
 
-  const saveSku = (e: any) => {
+  const saveSku = async (e: any) => {
     e.preventDefault();
-    warehouseService.saveProduct({ ...modal.data, minStok: Number(modal.data.minStok) });
+    await warehouseService.saveProduct({ ...modal.data, minStok: Number(modal.data.minStok) });
     toast(`Master Produk ${modal.data.kode} berhasil diperbarui`, 'success');
     setModal({ open: false, editing: null, data: {} }); refresh();
   };
 
-  const removeUser = (un: string) => {
+  const removeUser = async (un: string) => {
     if (un === currentUser.username) return toast("Tidak diperbolehkan menghapus akun yang sedang digunakan!", "error");
     if (confirm(`Apakah Anda yakin ingin menghapus akses untuk user ${un}?`)) {
-      warehouseService.deleteUser(un); toast('Akses user dicabut', 'info'); refresh();
+      await warehouseService.deleteUser(un); toast('Akses user dicabut', 'info'); refresh();
     }
   };
 
-  const removeSku = (kode: string) => {
+  const removeSku = async (kode: string) => {
     if (confirm(`Hapus Master SKU ${kode}? Semua data stok terkait akan terdampak.`)) {
-      warehouseService.deleteProduct(kode); toast('Master SKU dihapus', 'info'); refresh();
+      await warehouseService.deleteProduct(kode); toast('Master SKU dihapus', 'info'); refresh();
     }
   };
 
@@ -706,6 +706,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [toasts, setToasts] = useState<any[]>([]);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -718,12 +719,20 @@ export default function App() {
     setToasts(prev => [...prev, { id, message, type }]);
   }, []);
 
-  const refreshData = useCallback(() => {
+  const refreshData = useCallback(async () => {
+    setIsSyncing(true);
+    // Jalankan sync cloud
+    const cloudSyncSuccess = await warehouseService.syncAll();
+    
+    // Refresh local state setelah sync (baik berhasil atau tidak)
     setProducts(warehouseService.getProducts());
     setSuppliers(warehouseService.getSuppliers());
     setTransactions(warehouseService.getTransactions());
     setStock(warehouseService.getStockState());
-    showToast('Seluruh data sistem telah disinkronkan', 'info');
+    
+    setIsSyncing(false);
+    if (cloudSyncSuccess) showToast('Data cloud berhasil disinkronkan', 'success');
+    else showToast('Berjalan dalam mode offline (cache lokal)', 'info');
   }, [showToast]);
 
   useEffect(() => {
@@ -824,13 +833,17 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <button 
-              onClick={refreshData} 
-              className="p-3 text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all active:rotate-180 duration-500" 
-              title="Sinkronisasi Data"
-            >
-              <RefreshCw size={20}/>
-            </button>
+            <div className="flex items-center gap-2">
+               {isSyncing && <div className="text-[10px] text-blue-400 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={14} className="animate-spin"/> SYNCING...</div>}
+               <button 
+                onClick={refreshData} 
+                disabled={isSyncing}
+                className={`p-3 text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all ${isSyncing ? 'opacity-50' : 'active:rotate-180 duration-500'}`}
+                title="Sinkronisasi Cloud"
+              >
+                <RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''}/>
+              </button>
+            </div>
             <div className="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-2xl border border-white/5 shadow-inner">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white text-sm">
                 {user.username[0].toUpperCase()}
