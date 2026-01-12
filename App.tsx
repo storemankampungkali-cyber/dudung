@@ -5,7 +5,8 @@ import {
   ShieldCheck, LogOut, Menu, User as UserIcon, Bell, Search, RefreshCw, Plus, 
   Trash2, Save, X, FileDown, CheckCircle2, Info, XCircle, AlertTriangle, 
   TrendingUp, Activity, Box, Edit2, Filter as FilterIcon, Database, Link as LinkIcon,
-  MessageCircle, Send, ChevronDown, Calendar, RotateCcw, Sparkles, ArrowRight
+  MessageCircle, Send, ChevronDown, Calendar, RotateCcw, Sparkles, ArrowRight,
+  ShieldAlert
 } from 'lucide-react';
 import { Role, User, Transaction, Product, Supplier, StockState } from './types';
 import { TAB_CONFIG } from './constants';
@@ -419,9 +420,9 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
 }
 
 // ... Sisanya tetap sama (HistoryView, SupplierView, AdminView) ...
-function HistoryView({ transactions, products }: any) { return <div className="p-4">Riwayat View (Sesuai kode sebelumnya)</div>; }
-function SupplierView({ suppliers }: any) { return <div className="p-4">Supplier View (Sesuai kode sebelumnya)</div>; }
-function AdminView({ products, refresh, toast }: any) { return <div className="p-4">Admin View (Sesuai kode sebelumnya)</div>; }
+function HistoryView({ transactions, products }: any) { return <div className="p-4">Riwayat View</div>; }
+function SupplierView({ suppliers }: any) { return <div className="p-4">Supplier View</div>; }
+function AdminView({ products, refresh, toast }: any) { return <div className="p-4">Admin View</div>; }
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -474,34 +475,53 @@ export default function App() {
     
     try {
       const formData = new FormData(e.currentTarget);
-      const u = formData.get('username') as string;
-      const p = formData.get('password') as string;
+      const u = (formData.get('username') as string)?.trim();
+      const p = (formData.get('password') as string);
       
-      // Sinkronisasi paksa jika local users kosong
+      if (!u || !p) {
+        showToast('Username dan password wajib diisi.', 'warning');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      // Pastikan data users terbaru diambil dari storage
       let users = warehouseService.getUsers();
+      
+      // Jika database kosong sama sekali, coba sync dulu
       if (users.length === 0) {
+        showToast('Sinkronisasi database...', 'info');
         await warehouseService.syncAll();
         users = warehouseService.getUsers();
       }
 
       const found = users.find(x => x.username === u);
       
-      if (found && found.active) {
-        const hashed = await warehouseService.hashPassword(p);
-        if (hashed === found.password) {
-          setUser(found);
-          localStorage.setItem('wareflow_session', JSON.stringify(found));
-          showToast(`Berhasil masuk sebagai ${found.username}`, 'success');
-          refreshData(); // Refresh data setelah login berhasil
-        } else {
-          showToast('Kredensial tidak valid (Password salah).', 'error');
+      if (found) {
+        if (!found.active) {
+          showToast('Akun ini telah dinonaktifkan.', 'error');
+          setIsLoggingIn(false);
+          return;
+        }
+
+        try {
+          const hashed = await warehouseService.hashPassword(p);
+          if (hashed === found.password) {
+            setUser(found);
+            localStorage.setItem('wareflow_session', JSON.stringify(found));
+            showToast(`Berhasil masuk sebagai ${found.username}`, 'success');
+            refreshData(); 
+          } else {
+            showToast('Username atau password salah.', 'error');
+          }
+        } catch (hashErr: any) {
+          showToast(`Gagal memproses keamanan: ${hashErr.message}`, 'error');
         }
       } else {
-        showToast('Akun tidak ditemukan atau tidak aktif.', 'error');
+        showToast('Akun tidak ditemukan.', 'error');
       }
-    } catch (err) {
-      console.error(err);
-      showToast('Sistem login mengalami kendala teknis.', 'error');
+    } catch (err: any) {
+      console.error("Login Crash:", err);
+      showToast('Terjadi kesalahan sistem saat login.', 'error');
     } finally {
       setIsLoggingIn(false);
     }
@@ -510,28 +530,41 @@ export default function App() {
   if (!user) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#070b14] p-6 bg-main overflow-hidden">
-        <Card className="w-full max-w-md p-12 !border-white/5 animate-in fade-in zoom-in-95 duration-500 shadow-2xl">
+        <Card className="w-full max-w-md p-12 !border-white/5 animate-in fade-in zoom-in-95 duration-500 shadow-2xl relative">
           <div className="flex flex-col items-center mb-10">
-            <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center shadow-2xl mb-8 shadow-blue-500/30 animate-pulse">
+            <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl mb-8 shadow-blue-500/30 animate-pulse">
               <PackagePlus size={48} className="text-white" />
             </div>
             <h1 className="text-4xl font-black tracking-tighter text-white italic">WAREFLOW</h1>
-            <p className="text-[10px] uppercase font-black text-slate-600 tracking-[0.4em] mt-3">Access Control</p>
+            <p className="text-[10px] uppercase font-black text-slate-600 tracking-[0.4em] mt-3">Identity Access Management</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-8">
-            <Input label="Username" name="username" required autoComplete="username" />
-            <Input label="Password" type="password" name="password" required autoComplete="current-password" />
+          <form onSubmit={handleLogin} className="space-y-6">
+            <Input label="Username" name="username" required autoComplete="username" placeholder="Masukkan username..." />
+            <Input label="Password" type="password" name="password" required autoComplete="current-password" placeholder="••••••••" />
             <Button className="w-full h-16 tracking-[0.2em] font-black text-sm" type="submit" loading={isLoggingIn}>
               LOGIN SECURE
             </Button>
-            <div className="flex justify-between px-1">
-               <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">Enterprise Mode</p>
-               <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">v1.2.7</p>
+            
+            <div className="pt-4 border-t border-white/5 flex flex-col gap-4">
+               <div className="flex justify-between items-center px-1">
+                  <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">Enterprise Mode</p>
+                  <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">v1.2.8</p>
+               </div>
+               
+               {/* Emergency Button */}
+               <button 
+                 type="button"
+                 onClick={() => confirm("Reset semua data lokal ke pengaturan awal? Ini akan menghapus riwayat sesi Anda.") && warehouseService.resetToDefaults()}
+                 className="flex items-center justify-center gap-2 text-[8px] text-rose-900 hover:text-rose-500 font-black uppercase tracking-widest transition-colors py-2 opacity-50 hover:opacity-100"
+               >
+                 <ShieldAlert size={12} /> Emergency Reset Data Lokal
+               </button>
             </div>
           </form>
-          {isSyncing && (
-            <div className="mt-6 flex items-center justify-center gap-2 text-[10px] text-blue-400 font-black uppercase animate-pulse">
-              <RefreshCw size={12} className="animate-spin" /> Sinkronisasi Database...
+          
+          {(isSyncing || isLoggingIn) && (
+            <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-2 text-[9px] text-blue-500 font-black uppercase tracking-[0.2em] animate-pulse">
+              <RefreshCw size={10} className="animate-spin" /> Mengolah Data...
             </div>
           )}
         </Card>

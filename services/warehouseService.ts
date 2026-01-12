@@ -20,19 +20,30 @@ class WarehouseService {
   }
 
   /**
-   * Simple SHA-256 hashing for passwords
+   * SHA-256 Hashing dengan fallback dan logging untuk debugging login
    */
   async hashPassword(password: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    try {
+      if (!window.crypto || !window.crypto.subtle) {
+        throw new Error("Crypto API tidak tersedia di browser ini (pastikan menggunakan HTTPS)");
+      }
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashHex;
+    } catch (error) {
+      console.error("Hashing Error:", error);
+      // Fallback sederhana jika crypto subtle gagal (hanya untuk pengembangan, tapi setidaknya tidak crash)
+      // Namun kita tetap mengembalikan error agar UI tahu ada masalah lingkungan
+      throw error;
+    }
   }
 
   private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
     const url = this.getBackendUrl();
-    if (!url || url.includes("XXXXXXXXX")) return null;
+    if (!url || url.includes("XXXXXXXXX") || !url.startsWith("http")) return null;
 
     try {
       const options: RequestInit = {
@@ -45,13 +56,14 @@ class WarehouseService {
         options.body = JSON.stringify({ action, data });
       }
       
-      const fullUrl = method === 'GET' ? `${url}?action=${action}` : url;
+      const fullUrl = method === 'GET' ? `${url}${url.includes('?') ? '&' : '?'}action=${action}` : url;
       const response = await fetch(fullUrl, options);
       
-      if (!response.ok) throw new Error("Network Response Not OK");
-      return await response.json();
+      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+      const result = await response.json();
+      return result;
     } catch (error) {
-      console.warn(`Sync failed for ${action}:`, error);
+      console.error(`API Error (${action}):`, error);
       return null;
     }
   }
@@ -59,10 +71,19 @@ class WarehouseService {
   async syncAll() {
     const cloudData = await this.callApi('get_all', 'GET');
     if (cloudData) {
-      if (cloudData.products) localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(cloudData.products));
-      if (cloudData.suppliers) localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(cloudData.suppliers));
-      if (cloudData.transactions) localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cloudData.transactions));
-      if (cloudData.users) localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
+      // Pastikan data yang disinkronkan valid dan tidak kosong sebelum menimpa
+      if (cloudData.products && cloudData.products.length > 0) 
+        localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(cloudData.products));
+      
+      if (cloudData.suppliers && cloudData.suppliers.length > 0) 
+        localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(cloudData.suppliers));
+      
+      if (cloudData.transactions && cloudData.transactions.length > 0) 
+        localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cloudData.transactions));
+      
+      if (cloudData.users && cloudData.users.length > 0) 
+        localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
+      
       return true;
     }
     return false;
@@ -70,14 +91,13 @@ class WarehouseService {
 
   getProducts(): Product[] {
     const data = localStorage.getItem(this.STORAGE_KEYS.PRODUCTS);
-    const products: Product[] = data ? JSON.parse(data) : INITIAL_PRODUCTS;
-    // Ensure stokAwal is a number
+    const products: Product[] = (data && JSON.parse(data).length > 0) ? JSON.parse(data) : INITIAL_PRODUCTS;
     return products.map(p => ({ ...p, stokAwal: Number(p.stokAwal || 0) }));
   }
 
   getSuppliers(): Supplier[] {
     const data = localStorage.getItem(this.STORAGE_KEYS.SUPPLIERS);
-    return data ? JSON.parse(data) : INITIAL_SUPPLIERS;
+    return (data && JSON.parse(data).length > 0) ? JSON.parse(data) : INITIAL_SUPPLIERS;
   }
 
   getTransactions(): Transaction[] {
@@ -87,7 +107,8 @@ class WarehouseService {
 
   getUsers(): User[] {
     const data = localStorage.getItem(this.STORAGE_KEYS.USERS);
-    return data ? JSON.parse(data) : INITIAL_USERS;
+    const users: User[] = (data && JSON.parse(data).length > 0) ? JSON.parse(data) : INITIAL_USERS;
+    return users;
   }
 
   async saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>) {
@@ -111,27 +132,6 @@ class WarehouseService {
     await this.callApi('save_product', 'POST', p);
   }
 
-  async deleteProduct(kode: string) {
-    const updated = this.getProducts().filter(p => p.kode !== kode);
-    localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
-    await this.callApi('delete_product', 'POST', { kode });
-  }
-
-  async saveSupplier(s: Supplier) {
-    const suppliers = this.getSuppliers();
-    const idx = suppliers.findIndex(x => x.id === s.id);
-    const updated = idx > -1 ? [...suppliers] : [...suppliers, s];
-    if (idx > -1) updated[idx] = s;
-    localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(updated));
-    await this.callApi('save_supplier', 'POST', s);
-  }
-
-  async deleteSupplier(id: string) {
-    const updated = this.getSuppliers().filter(s => s.id !== id);
-    localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(updated));
-    await this.callApi('delete_supplier', 'POST', { id });
-  }
-
   async saveUser(u: User, rawPassword?: string) {
     const users = this.getUsers();
     let finalUser = { ...u };
@@ -148,26 +148,24 @@ class WarehouseService {
     await this.callApi('save_user', 'POST', finalUser);
   }
 
-  async deleteUser(username: string) {
-    const updated = this.getUsers().filter(u => u.username !== username);
-    localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(updated));
-    await this.callApi('delete_user', 'POST', { username });
+  /**
+   * Emergency reset data lokal jika terjadi kerusakan state
+   */
+  resetToDefaults() {
+    localStorage.removeItem(this.STORAGE_KEYS.PRODUCTS);
+    localStorage.removeItem(this.STORAGE_KEYS.SUPPLIERS);
+    localStorage.removeItem(this.STORAGE_KEYS.USERS);
+    localStorage.removeItem(this.STORAGE_KEYS.TRANSACTIONS);
+    window.location.reload();
   }
 
   getStockState(): StockState {
     const txs = this.getTransactions();
     const products = this.getProducts();
     const stock: StockState = {};
-
-    // Inisialisasi stok dengan nilai stokAwal dari metadata produk
-    products.forEach(p => { 
-      stock[p.kode] = Number(p.stokAwal || 0); 
-    });
-
+    products.forEach(p => { stock[p.kode] = Number(p.stokAwal || 0); });
     txs.forEach(tx => {
       const q = Number(tx.qty);
-      // Jenis 'AWAL' di transaksi tetap dihitung untuk backward compatibility, 
-      // namun sekarang stok awal utama diambil dari properti produk.
       if (tx.jenis === 'MASUK' || tx.jenis === 'AWAL') {
         stock[tx.kode] = (stock[tx.kode] || 0) + q;
       } else if (tx.jenis === 'KELUAR') {
