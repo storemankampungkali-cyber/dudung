@@ -9,7 +9,7 @@ export interface ChatHistoryItem {
 
 export class GeminiService {
   /**
-   * Generates inventory insights using Gemini.
+   * Menghasilkan wawasan stok menggunakan Gemini.
    */
   async getStockInsights(products: Product[], stock: Record<string, number>, transactions: Transaction[]) {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -19,14 +19,10 @@ export class GeminiService {
       const stockSummary = products.slice(0, 10).map(p => `${p.nama}: Current=${stock[p.kode] || 0}, Min=${p.minStok}`).join('\n');
 
       const prompt = `
-        Tugas: Analisis inventaris gudang berikut:
-        RINGKASAN STOK:
-        ${stockSummary}
-
-        TRANSAKSI TERBARU:
-        ${recentTxs}
-
-        Berikan: 1. Status ringkas. 2. Item kritis yang harus dipesan. 3. Saran tindakan cepat. Gunakan Bahasa Indonesia yang sangat profesional dan to-the-point.
+        Analisis data gudang ini:
+        STOK: ${stockSummary}
+        TRANSAKSI TERBARU: ${recentTxs}
+        Berikan ringkasan status, item kritis, dan saran tindakan dalam Bahasa Indonesia yang singkat dan profesional.
       `;
 
       const response = await ai.models.generateContent({
@@ -36,19 +32,18 @@ export class GeminiService {
 
       return response.text;
     } catch (error) {
-      console.error("Gemini Error:", error);
-      return "Wawasan AI saat ini tidak tersedia.";
+      console.error("Gemini Insights Error:", error);
+      return "Wawasan AI tidak tersedia saat ini.";
     }
   }
 
   /**
-   * General purpose chat with Gemini with history support.
+   * Chat umum dengan Gemini yang mendukung riwayat percakapan.
    */
   async chat(message: string, history: ChatHistoryItem[] = []) {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     try {
-      // Menggunakan model terbaru gemini-3-flash-preview
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [
@@ -56,16 +51,16 @@ export class GeminiService {
           { role: 'user', parts: [{ text: message }] }
         ],
         config: {
-          systemInstruction: "Anda adalah asisten cerdas Wareflow. Anda memiliki akses ke data manajemen gudang dan pengetahuan umum yang luas. Tugas Anda adalah membantu pengguna mengelola stok, menjawab pertanyaan seputar logistik, atau berdiskusi hal umum lainnya. Berikan jawaban yang informatif, akurat, dan gunakan Bahasa Indonesia yang alami namun tetap profesional. Jangan ragu untuk memberikan saran proaktif jika relevan dengan efisiensi operasional.",
-          temperature: 0.8,
-          topP: 0.9,
+          systemInstruction: "Anda adalah Wareflow AI, asisten manajemen gudang yang cerdas dan proaktif. Anda membantu pengguna dalam mengelola stok, menganalisis data logistik, dan memberikan solusi administratif. Jawablah dengan nada profesional, ramah, dan solutif dalam Bahasa Indonesia. Anda juga bisa berdiskusi topik umum di luar gudang jika ditanya.",
+          temperature: 0.75,
+          topP: 0.95,
         }
       });
 
       return response.text;
     } catch (error) {
       console.error("Gemini Chat Error:", error);
-      return "Maaf, asisten AI sedang mengalami gangguan koneksi. Silakan coba lagi sebentar lagi.";
+      return "Maaf, sistem AI sedang sibuk. Silakan coba lagi dalam beberapa saat.";
     }
   }
 }
