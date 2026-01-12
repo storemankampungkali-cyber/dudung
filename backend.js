@@ -14,13 +14,9 @@
  *    - Who has access: Anyone
  * 8. Klik Deploy, salin URL yang diberikan (berakhiran /exec).
  * 9. Tempel URL tersebut di tab Admin > Koneksi Cloud pada aplikasi Wareflow.
- *
- * CATATAN: Jangan klik tombol "Jalankan" di editor ini untuk doGet/doPost 
- * karena akan error secara otomatis (membutuhkan parameter web request).
  */
 
 function doGet(e) {
-  // Proteksi jika dijalankan manual dari editor
   if (!e || !e.parameter) {
     return ContentService.createTextOutput("Backend Aktif. Gunakan URL ini di aplikasi Wareflow.")
       .setMimeType(ContentService.MimeType.TEXT);
@@ -29,7 +25,6 @@ function doGet(e) {
   const action = e.parameter.action;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Inisialisasi sheet jika belum ada
   initSheets(ss);
 
   if (action === 'get_all') {
@@ -40,10 +35,14 @@ function doGet(e) {
       users: getSheetData(ss.getSheetByName("Users"))
     });
   }
+
+  if (action === 'init_admin') {
+    createInitialAdmin(ss);
+    return createResponse({ status: "success", message: "Admin account initialized" });
+  }
 }
 
 function doPost(e) {
-  // Proteksi jika dijalankan manual dari editor
   if (!e || !e.postData) {
     return createResponse({ status: "error", message: "No post data received" });
   }
@@ -89,6 +88,8 @@ function doPost(e) {
  * Inisialisasi Struktur Google Sheet secara otomatis
  */
 function initSheets(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  
   const config = [
     { name: "Products", headers: ["kode", "nama", "satuanDefault", "satuanAlt1", "konversiAlt1", "satuanAlt2", "konversiAlt2", "minStok", "stokAwal"] },
     { name: "Suppliers", headers: ["id", "nama", "alamat", "telp", "email", "pic", "ket"] },
@@ -102,8 +103,12 @@ function initSheets(ss) {
       sheet = ss.insertSheet(item.name);
       sheet.appendRow(item.headers);
       sheet.getRange(1, 1, 1, item.headers.length).setFontWeight("bold").setBackground("#f3f3f3");
+      
+      // Jika sheet Users baru dibuat, buatkan admin default
+      if (item.name === "Users") {
+        createInitialAdmin(ss);
+      }
     } else {
-      // Pastikan header lengkap jika sheet sudah ada (fitur migrasi kolom baru)
       const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
       item.headers.forEach(h => {
         if (currentHeaders.indexOf(h) === -1) {
@@ -112,6 +117,43 @@ function initSheets(ss) {
       });
     }
   });
+}
+
+/**
+ * Fungsi untuk membuat User Admin default jika belum ada
+ * Username: admin
+ * Password: admin123
+ */
+function createInitialAdmin(ss) {
+  // Jika dipanggil manual dari editor Apps Script tanpa parameter ss
+  if (!ss || ss.toString().indexOf('Spreadsheet') === -1) {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  }
+  
+  const sheet = ss.getSheetByName("Users");
+  if (!sheet) {
+    // Jika sheet belum ada, jalankan initSheets dulu
+    initSheets(ss);
+    return createInitialAdmin(ss);
+  }
+  
+  const data = getSheetData(sheet);
+  const adminExists = data.some(u => u.username === 'admin');
+  
+  if (!adminExists) {
+    const adminData = {
+      username: 'admin',
+      // Hash SHA-256 dari 'admin123'
+      password: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa8228268450d7021',
+      role: 'ADMIN',
+      active: true,
+      lastLogin: new Date().toISOString()
+    };
+    appendRow(sheet, adminData);
+    Logger.log("Default admin created: admin / admin123");
+  } else {
+    Logger.log("Admin already exists.");
+  }
 }
 
 /**
