@@ -39,10 +39,13 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
   { id: 'SUP002', nama: 'CV Maju Bersama', alamat: 'Surabaya', telp: '031-654321', pic: 'Ani' },
 ];
 
+// Default hashed password for 'admin123' (SHA-256)
+const DEFAULT_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa8228268450d7021";
+
 export const INITIAL_USERS: User[] = [
-  { username: 'admin', role: 'ADMIN', active: true, lastLogin: '2023-10-27 10:00' },
-  { username: 'staff', role: 'STAFF', active: true, lastLogin: '2023-10-27 09:30' },
-  { username: 'viewer', role: 'VIEWER', active: true, lastLogin: '2023-10-26 15:00' },
+  { username: 'admin', password: DEFAULT_HASH, role: 'ADMIN', active: true, lastLogin: '2023-10-27 10:00' },
+  { username: 'staff', password: DEFAULT_HASH, role: 'STAFF', active: true, lastLogin: '2023-10-27 09:30' },
+  { username: 'viewer', password: DEFAULT_HASH, role: 'VIEWER', active: true, lastLogin: '2023-10-26 15:00' },
 ];
 
 export const TAB_CONFIG: Record<string, { label: string; icon: string; roles: string[] }> = {
@@ -52,5 +55,6 @@ export const TAB_CONFIG: Record<string, { label: string; icon: string; roles: st
   opname: { label: 'Stock Opname', icon: 'ClipboardCheck', roles: ['ADMIN', 'STAFF'] },
   riwayat: { label: 'Riwayat', icon: 'History', roles: ['ADMIN', 'STAFF', 'VIEWER'] },
   supplier: { label: 'Supplier', icon: 'Truck', roles: ['ADMIN', 'STAFF'] },
+  chat: { label: 'AI Chat', icon: 'MessageCircle', roles: ['ADMIN', 'STAFF', 'VIEWER'] },
   admin: { label: 'Admin', icon: 'ShieldCheck', roles: ['ADMIN'] },
 };

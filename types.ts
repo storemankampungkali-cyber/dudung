@@ -3,6 +3,7 @@ export type Role = 'ADMIN' | 'STAFF' | 'VIEWER';
 
 export interface User {
   username: string;
+  password?: string; // Hashed password
   role: Role;
   active: boolean;
   lastLogin?: string;
@@ -13,7 +14,7 @@ export interface Product {
   nama: string;
   satuanDefault: string;
   satuanAlt1?: string;
-  konversiAlt1?: number; // How many default units in 1 Alt1 (e.g. 12 PCS in 1 LUSIN)
+  konversiAlt1?: number;
   satuanAlt2?: string;
   konversiAlt2?: number;
   minStok: number;
@@ -33,12 +34,12 @@ export interface Transaction {
   id: string;
   tgl: string;
   waktu: string;
-  jenis: 'MASUK' | 'KELUAR' | 'OPNAME';
+  jenis: 'MASUK' | 'KELUAR' | 'OPNAME' | 'AWAL';
   nama: string;
   kode: string;
-  qty: number; // Stored as base unit quantity
-  satuan: string; // The unit chosen during transaction
-  displayQty?: number; // The quantity in the chosen unit
+  qty: number;
+  satuan: string;
+  displayQty?: number;
   keterangan: string;
   user: string;
   supplier?: string;

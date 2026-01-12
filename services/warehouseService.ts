@@ -19,6 +19,17 @@ class WarehouseService {
     localStorage.setItem(this.STORAGE_KEYS.GAS_URL, url);
   }
 
+  /**
+   * Simple SHA-256 hashing for passwords
+   */
+  async hashPassword(password: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
   private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
     const url = this.getBackendUrl();
     if (!url || url.includes("XXXXXXXXX")) return null;
@@ -119,13 +130,20 @@ class WarehouseService {
     await this.callApi('delete_supplier', 'POST', { id });
   }
 
-  async saveUser(u: User) {
+  async saveUser(u: User, rawPassword?: string) {
     const users = this.getUsers();
-    const idx = users.findIndex(x => x.username === u.username);
-    const updated = idx > -1 ? [...users] : [...users, u];
-    if (idx > -1) updated[idx] = u;
+    let finalUser = { ...u };
+    
+    if (rawPassword) {
+      finalUser.password = await this.hashPassword(rawPassword);
+    }
+    
+    const idx = users.findIndex(x => x.username === finalUser.username);
+    const updated = idx > -1 ? [...users] : [...users, finalUser];
+    if (idx > -1) updated[idx] = finalUser;
+    
     localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(updated));
-    await this.callApi('save_user', 'POST', u);
+    await this.callApi('save_user', 'POST', finalUser);
   }
 
   async deleteUser(username: string) {
@@ -140,7 +158,7 @@ class WarehouseService {
     this.getProducts().forEach(p => { stock[p.kode] = 0; });
     txs.forEach(tx => {
       const q = Number(tx.qty);
-      if (tx.jenis === 'MASUK') stock[tx.kode] = (stock[tx.kode] || 0) + q;
+      if (tx.jenis === 'MASUK' || tx.jenis === 'AWAL') stock[tx.kode] = (stock[tx.kode] || 0) + q;
       else if (tx.jenis === 'KELUAR') stock[tx.kode] = (stock[tx.kode] || 0) - q;
       else if (tx.jenis === 'OPNAME') stock[tx.kode] = q;
     });

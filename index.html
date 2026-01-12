@@ -30,6 +30,9 @@
         radial-gradient(900px 500px at 90% 10%, rgba(34, 211, 238, 0.1), transparent),
         #070b14;
     }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
     ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
@@ -49,7 +52,6 @@
 </head>
 <body class="bg-main h-screen w-screen overflow-hidden">
   <div id="root" class="h-full w-full"></div>
-  <!-- CRITICAL: Script tag to load the app -->
   <script type="module" src="./index.tsx"></script>
 </body>
 </html>
