@@ -45,7 +45,7 @@ class WarehouseService {
     return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.USERS) || JSON.stringify(INITIAL_USERS));
   }
 
-  // SETTERS (Saves to local & tries cloud)
+  // SETTERS
   async saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>) {
     const newTx = { ...tx, id: `TX-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, waktu: new Date().toLocaleTimeString() };
     const localTxs = this.getTransactions();
@@ -55,19 +55,50 @@ class WarehouseService {
 
   saveProduct(p: Product) {
     const products = this.getProducts();
-    const updated = [...products.filter(x => x.kode !== p.kode), p];
+    const exists = products.findIndex(x => x.kode === p.kode);
+    let updated;
+    if (exists > -1) {
+      updated = [...products];
+      updated[exists] = p;
+    } else {
+      updated = [...products, p];
+    }
     localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+  }
+
+  deleteProduct(kode: string) {
+    const products = this.getProducts();
+    localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(products.filter(p => p.kode !== kode)));
   }
 
   saveSupplier(s: Supplier) {
     const suppliers = this.getSuppliers();
-    const updated = [...suppliers.filter(x => x.id !== s.id), s];
+    const exists = suppliers.findIndex(x => x.id === s.id);
+    let updated;
+    if (exists > -1) {
+      updated = [...suppliers];
+      updated[exists] = s;
+    } else {
+      updated = [...suppliers, s];
+    }
     localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(updated));
+  }
+
+  deleteSupplier(id: string) {
+    const suppliers = this.getSuppliers();
+    localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers.filter(s => s.id !== id)));
   }
 
   saveUser(u: User) {
     const users = this.getUsers();
-    const updated = [...users.filter(x => x.username !== u.username), u];
+    const exists = users.findIndex(x => x.username === u.username);
+    let updated;
+    if (exists > -1) {
+      updated = [...users];
+      updated[exists] = u;
+    } else {
+      updated = [...users, u];
+    }
     localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(updated));
   }
 
