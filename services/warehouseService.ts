@@ -1,96 +1,62 @@
 
 import { Product, Supplier, Transaction, User, StockState } from '../types';
-import { INITIAL_PRODUCTS, INITIAL_SUPPLIERS, INITIAL_USERS } from '../constants';
+import { INITIAL_USERS } from '../constants';
 
-const KEYS = {
-  PRODUCTS: 'wareflow_products',
-  SUPPLIERS: 'wareflow_suppliers',
-  TRANSACTIONS: 'wareflow_transactions',
-  USERS: 'wareflow_users',
-};
+// GANTI URL INI dengan URL Web App Google Apps Script Anda setelah di-deploy
+const BACKEND_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
 
 class WarehouseService {
-  private getData<T>(key: string, initial: T): T {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : initial;
-  }
-
-  private setData<T>(key: string, data: T): void {
-    localStorage.setItem(key, JSON.stringify(data));
-  }
-
-  getProducts(): Product[] {
-    return this.getData(KEYS.PRODUCTS, INITIAL_PRODUCTS);
-  }
-
-  getSuppliers(): Supplier[] {
-    return this.getData(KEYS.SUPPLIERS, INITIAL_SUPPLIERS);
-  }
-
-  getTransactions(): Transaction[] {
-    return this.getData(KEYS.TRANSACTIONS, []);
-  }
-
-  getUsers(): User[] {
-    return this.getData(KEYS.USERS, INITIAL_USERS);
-  }
-
-  saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>): Transaction {
-    const transactions = this.getTransactions();
-    const newTx: Transaction = {
-      ...tx,
-      id: `TX-${Date.now()}`,
-      waktu: new Date().toLocaleTimeString('id-ID'),
+  private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
+    const url = method === 'GET' ? `${BACKEND_URL}?action=${action}` : BACKEND_URL;
+    const options: RequestInit = {
+      method: method,
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8', // GAS often requires text/plain to avoid CORS preflight
+      }
     };
-    transactions.unshift(newTx);
-    this.setData(KEYS.TRANSACTIONS, transactions);
-    return newTx;
+
+    if (method === 'POST') {
+      options.body = JSON.stringify({ action, data });
+    }
+
+    const response = await fetch(url, options);
+    return response.json();
   }
 
-  getStockState(): StockState {
-    const txs = this.getTransactions();
-    const stock: StockState = {};
-    
-    // Initialize with 0 for all known products
-    this.getProducts().forEach(p => stock[p.kode] = 0);
+  async getAllData() {
+    return this.callApi('get_all_data', 'GET');
+  }
 
-    // Apply transactions in chronological order (though stored reverse, let's process carefully)
-    // Actually, simple sum works since it's cumulative
-    txs.forEach(tx => {
+  async saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>) {
+    return this.callApi('save_transaction', 'POST', tx);
+  }
+
+  async saveSupplier(supplier: Supplier) {
+    return this.callApi('save_supplier', 'POST', supplier);
+  }
+
+  async saveUser(user: User) {
+    return this.callApi('save_user', 'POST', user);
+  }
+
+  // getUsers provides access to defined system users
+  getUsers(): User[] {
+    return INITIAL_USERS;
+  }
+
+  // Stock calculation logic tetap bisa di frontend untuk kecepatan UI, 
+  // tapi datanya diambil dari transaksi yang ditarik dari backend.
+  calculateStock(transactions: Transaction[], products: Product[]): StockState {
+    const stock: StockState = {};
+    products.forEach(p => stock[p.kode] = 0);
+    transactions.forEach(tx => {
       if (!stock[tx.kode]) stock[tx.kode] = 0;
       if (tx.jenis === 'MASUK') stock[tx.kode] += tx.qty;
       if (tx.jenis === 'KELUAR') stock[tx.kode] -= tx.qty;
-      if (tx.jenis === 'OPNAME') stock[tx.kode] = tx.qty; // Opname sets the final value
+      if (tx.jenis === 'OPNAME') stock[tx.kode] = tx.qty;
     });
-    
     return stock;
-  }
-
-  saveSupplier(supplier: Supplier): void {
-    const suppliers = this.getSuppliers();
-    const index = suppliers.findIndex(s => s.id === supplier.id);
-    if (index >= 0) {
-      suppliers[index] = supplier;
-    } else {
-      suppliers.push(supplier);
-    }
-    this.setData(KEYS.SUPPLIERS, suppliers);
-  }
-
-  saveUser(user: User): void {
-    const users = this.getUsers();
-    const index = users.findIndex(u => u.username === user.username);
-    if (index >= 0) {
-      users[index] = user;
-    } else {
-      users.push(user);
-    }
-    this.setData(KEYS.USERS, users);
-  }
-
-  deleteUser(username: string): void {
-    const users = this.getUsers().filter(u => u.username !== username);
-    this.setData(KEYS.USERS, users);
   }
 }
 
