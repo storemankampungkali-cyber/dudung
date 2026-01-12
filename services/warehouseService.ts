@@ -1,75 +1,91 @@
 
 import { Product, Supplier, Transaction, User, StockState } from '../types';
-import { INITIAL_USERS } from '../constants';
+import { INITIAL_USERS, INITIAL_PRODUCTS, INITIAL_SUPPLIERS } from '../constants';
 
-/**
- * PENTING:
- * Di Vercel, tambahkan Environment Variable: VITE_GAS_URL
- * Isi dengan URL Deployment Google Apps Script Anda.
- */
 const BACKEND_URL = (import.meta as any).env?.VITE_GAS_URL || '';
 
 class WarehouseService {
-  private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
-    if (!BACKEND_URL) {
-      console.warn("BACKEND_URL belum dikonfigurasi di Environment Variables!");
-      return { error: "API URL Missing" };
-    }
+  private STORAGE_KEYS = {
+    PRODUCTS: 'wareflow_products',
+    TRANSACTIONS: 'wareflow_transactions',
+    SUPPLIERS: 'wareflow_suppliers',
+    USERS: 'wareflow_users'
+  };
 
-    const url = method === 'GET' ? `${BACKEND_URL}?action=${action}` : BACKEND_URL;
-    
+  private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
+    if (!BACKEND_URL) return { error: "Offline Mode" };
     try {
       const options: RequestInit = {
         method: method,
         mode: 'cors',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8', 
-        }
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
       };
-
-      if (method === 'POST') {
-        options.body = JSON.stringify({ action, data });
-      }
-
-      const response = await fetch(url, options);
-      if (!response.ok) throw new Error("Network response was not ok");
+      if (method === 'POST') options.body = JSON.stringify({ action, data });
+      const response = await fetch(method === 'GET' ? `${BACKEND_URL}?action=${action}` : BACKEND_URL, options);
       return await response.json();
     } catch (error) {
-      console.error("API Call Failed:", error);
-      return { error: "Gagal terhubung ke server" };
+      return { error: "Connection failed" };
     }
   }
 
-  async getAllData() {
-    return this.callApi('get_all_data', 'GET');
+  // GETTERS
+  getProducts(): Product[] {
+    return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.PRODUCTS) || JSON.stringify(INITIAL_PRODUCTS));
   }
 
-  async saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>) {
-    return this.callApi('save_transaction', 'POST', tx);
+  getSuppliers(): Supplier[] {
+    return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.SUPPLIERS) || JSON.stringify(INITIAL_SUPPLIERS));
+  }
+
+  getTransactions(): Transaction[] {
+    return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.TRANSACTIONS) || '[]');
   }
 
   getUsers(): User[] {
-    return INITIAL_USERS;
+    return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.USERS) || JSON.stringify(INITIAL_USERS));
   }
 
-  calculateStock(transactions: Transaction[] = [], products: Product[] = []): StockState {
-    const stock: StockState = {};
-    if (!Array.isArray(products)) return stock;
-    
-    products.forEach(p => {
-      if (p && p.kode) stock[p.kode] = 0;
-    });
+  // SETTERS (Saves to local & tries cloud)
+  async saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>) {
+    const newTx = { ...tx, id: `TX-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, waktu: new Date().toLocaleTimeString() };
+    const localTxs = this.getTransactions();
+    localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify([...localTxs, newTx]));
+    return await this.callApi('save_transaction', 'POST', newTx);
+  }
 
-    if (Array.isArray(transactions)) {
-      transactions.forEach(tx => {
-        if (!tx || !tx.kode) return;
-        if (stock[tx.kode] === undefined) stock[tx.kode] = 0;
-        
-        if (tx.jenis === 'MASUK') stock[tx.kode] += (Number(tx.qty) || 0);
-        else if (tx.jenis === 'KELUAR') stock[tx.kode] -= (Number(tx.qty) || 0);
-        else if (tx.jenis === 'OPNAME') stock[tx.kode] = (Number(tx.qty) || 0);
-      });
-    }
+  saveProduct(p: Product) {
+    const products = this.getProducts();
+    const updated = [...products.filter(x => x.kode !== p.kode), p];
+    localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+  }
+
+  saveSupplier(s: Supplier) {
+    const suppliers = this.getSuppliers();
+    const updated = [...suppliers.filter(x => x.id !== s.id), s];
+    localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(updated));
+  }
+
+  saveUser(u: User) {
+    const users = this.getUsers();
+    const updated = [...users.filter(x => x.username !== u.username), u];
+    localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(updated));
+  }
+
+  deleteUser(username: string) {
+    const users = this.getUsers();
+    localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(users.filter(u => u.username !== username)));
+  }
+
+  getStockState(): StockState {
+    const txs = this.getTransactions();
+    const stock: StockState = {};
+    this.getProducts().forEach(p => { stock[p.kode] = 0; });
+    
+    txs.forEach(tx => {
+      if (tx.jenis === 'MASUK') stock[tx.kode] = (stock[tx.kode] || 0) + tx.qty;
+      else if (tx.jenis === 'KELUAR') stock[tx.kode] = (stock[tx.kode] || 0) - tx.qty;
+      else if (tx.jenis === 'OPNAME') stock[tx.kode] = tx.qty;
+    });
     return stock;
   }
 }
