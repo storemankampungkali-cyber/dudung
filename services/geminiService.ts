@@ -15,14 +15,18 @@ export class GeminiService {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     try {
-      const recentTxs = transactions.slice(0, 15).map(t => `${t.tgl} ${t.jenis} ${t.nama} ${t.qty} ${t.satuan}`).join('\n');
+      const recentTxs = transactions.slice(-10).map(t => `${t.tgl} ${t.jenis} ${t.nama} ${t.qty} ${t.satuan}`).join('\n');
       const stockSummary = products.slice(0, 10).map(p => `${p.nama}: Current=${stock[p.kode] || 0}, Min=${p.minStok}`).join('\n');
 
       const prompt = `
-        Analyze this inventory:
-        STOCK: ${stockSummary}
-        RECENT: ${recentTxs}
-        Provide: 1. Status summary. 2. Critical items. 3. Reorder suggestions. Brief and professional.
+        Tugas: Analisis inventaris gudang berikut:
+        RINGKASAN STOK:
+        ${stockSummary}
+
+        TRANSAKSI TERBARU:
+        ${recentTxs}
+
+        Berikan: 1. Status ringkas. 2. Item kritis yang harus dipesan. 3. Saran tindakan cepat. Gunakan Bahasa Indonesia yang sangat profesional dan to-the-point.
       `;
 
       const response = await ai.models.generateContent({
@@ -33,7 +37,7 @@ export class GeminiService {
       return response.text;
     } catch (error) {
       console.error("Gemini Error:", error);
-      return "AI Insight currently unavailable.";
+      return "Wawasan AI saat ini tidak tersedia.";
     }
   }
 
@@ -44,19 +48,24 @@ export class GeminiService {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     try {
-      const chat = ai.chats.create({
+      // Menggunakan model terbaru gemini-3-flash-preview
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        history: history,
+        contents: [
+          ...history,
+          { role: 'user', parts: [{ text: message }] }
+        ],
         config: {
-          systemInstruction: "You are a versatile and helpful AI assistant integrated into Wareflow. While you can help with warehouse and logistics queries, you are a general-purpose assistant capable of discussing any topic, providing creative advice, solving problems, and engaging in friendly conversation. Be professional yet approachable.",
-        },
+          systemInstruction: "Anda adalah asisten cerdas Wareflow. Anda memiliki akses ke data manajemen gudang dan pengetahuan umum yang luas. Tugas Anda adalah membantu pengguna mengelola stok, menjawab pertanyaan seputar logistik, atau berdiskusi hal umum lainnya. Berikan jawaban yang informatif, akurat, dan gunakan Bahasa Indonesia yang alami namun tetap profesional. Jangan ragu untuk memberikan saran proaktif jika relevan dengan efisiensi operasional.",
+          temperature: 0.8,
+          topP: 0.9,
+        }
       });
 
-      const result = await chat.sendMessage({ message });
-      return result.text;
+      return response.text;
     } catch (error) {
       console.error("Gemini Chat Error:", error);
-      return "Maaf, terjadi kesalahan saat menghubungi AI.";
+      return "Maaf, asisten AI sedang mengalami gangguan koneksi. Silakan coba lagi sebentar lagi.";
     }
   }
 }
