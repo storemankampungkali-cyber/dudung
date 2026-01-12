@@ -2,59 +2,56 @@
 import { Product, Supplier, Transaction, User, StockState } from '../types';
 import { INITIAL_USERS, INITIAL_PRODUCTS, INITIAL_SUPPLIERS } from '../constants';
 
-// GANTI URL INI dengan URL Web App dari Google Apps Script Anda setelah di-deploy
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbz_XXXXXXXXX/exec"; 
-
 class WarehouseService {
   private STORAGE_KEYS = {
     PRODUCTS: 'wareflow_products',
     TRANSACTIONS: 'wareflow_transactions',
     SUPPLIERS: 'wareflow_suppliers',
-    USERS: 'wareflow_users'
+    USERS: 'wareflow_users',
+    GAS_URL: 'wareflow_gas_url'
   };
 
+  private getBackendUrl(): string {
+    return localStorage.getItem(this.STORAGE_KEYS.GAS_URL) || "";
+  }
+
+  setBackendUrl(url: string) {
+    localStorage.setItem(this.STORAGE_KEYS.GAS_URL, url);
+  }
+
   private async callApi(action: string, method: 'GET' | 'POST', data?: any) {
-    // Jika URL masih default atau kosong, jangan panggil API
-    if (!BACKEND_URL || BACKEND_URL.includes("XXXXXXXXX")) return null;
+    const url = this.getBackendUrl();
+    if (!url || url.includes("XXXXXXXXX")) return null;
 
     try {
       const options: RequestInit = {
         method: method,
         mode: 'cors',
-        headers: { 
-          'Content-Type': 'text/plain;charset=utf-8' 
-        }
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
       };
 
       if (method === 'POST') {
         options.body = JSON.stringify({ action, data });
       }
       
-      const url = method === 'GET' ? `${BACKEND_URL}?action=${action}` : BACKEND_URL;
-      const response = await fetch(url, options);
+      const fullUrl = method === 'GET' ? `${url}?action=${action}` : url;
+      const response = await fetch(fullUrl, options);
       
       if (!response.ok) throw new Error("Network Response Not OK");
       return await response.json();
     } catch (error) {
-      console.warn(`Backend Sync Failed (${action}):`, error);
+      console.warn(`Sync failed for ${action}:`, error);
       return null;
     }
   }
 
-  /**
-   * Mengambil data terbaru dari Spreadsheet dan menyimpannya ke LocalStorage
-   */
   async syncAll() {
     const cloudData = await this.callApi('get_all', 'GET');
     if (cloudData) {
-      if (cloudData.products && cloudData.products.length > 0) 
-        localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(cloudData.products));
-      if (cloudData.suppliers && cloudData.suppliers.length > 0) 
-        localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(cloudData.suppliers));
-      if (cloudData.transactions && cloudData.transactions.length > 0) 
-        localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cloudData.transactions));
-      if (cloudData.users && cloudData.users.length > 0) 
-        localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
+      if (cloudData.products) localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(cloudData.products));
+      if (cloudData.suppliers) localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(cloudData.suppliers));
+      if (cloudData.transactions) localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cloudData.transactions));
+      if (cloudData.users) localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
       return true;
     }
     return false;
@@ -83,15 +80,11 @@ class WarehouseService {
   async saveTransaction(tx: Omit<Transaction, 'id' | 'waktu'>) {
     const newTx = { 
       ...tx, 
-      id: `TX-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, 
+      id: `TX-${Date.now()}`, 
       waktu: new Date().toLocaleTimeString('id-ID') 
     };
-    
-    // Update Lokal
     const localTxs = this.getTransactions();
     localStorage.setItem(this.STORAGE_KEYS.TRANSACTIONS, JSON.stringify([...localTxs, newTx]));
-    
-    // Push ke Cloud
     await this.callApi('save_transaction', 'POST', newTx);
     return newTx;
   }
@@ -101,7 +94,6 @@ class WarehouseService {
     const idx = products.findIndex(x => x.kode === p.kode);
     const updated = idx > -1 ? [...products] : [...products, p];
     if (idx > -1) updated[idx] = p;
-    
     localStorage.setItem(this.STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
     await this.callApi('save_product', 'POST', p);
   }
@@ -117,7 +109,6 @@ class WarehouseService {
     const idx = suppliers.findIndex(x => x.id === s.id);
     const updated = idx > -1 ? [...suppliers] : [...suppliers, s];
     if (idx > -1) updated[idx] = s;
-
     localStorage.setItem(this.STORAGE_KEYS.SUPPLIERS, JSON.stringify(updated));
     await this.callApi('save_supplier', 'POST', s);
   }
@@ -133,7 +124,6 @@ class WarehouseService {
     const idx = users.findIndex(x => x.username === u.username);
     const updated = idx > -1 ? [...users] : [...users, u];
     if (idx > -1) updated[idx] = u;
-
     localStorage.setItem(this.STORAGE_KEYS.USERS, JSON.stringify(updated));
     await this.callApi('save_user', 'POST', u);
   }
@@ -147,10 +137,7 @@ class WarehouseService {
   getStockState(): StockState {
     const txs = this.getTransactions();
     const stock: StockState = {};
-    
-    // Inisialisasi stok 0 untuk semua produk
     this.getProducts().forEach(p => { stock[p.kode] = 0; });
-    
     txs.forEach(tx => {
       const q = Number(tx.qty);
       if (tx.jenis === 'MASUK') stock[tx.kode] = (stock[tx.kode] || 0) + q;
