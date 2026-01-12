@@ -28,7 +28,7 @@ const ToastItem = ({ toast, onRemove }: any) => {
   };
 
   return (
-    <div className="flex items-center gap-4 px-6 py-4 rounded-2xl border border-white/10 bg-slate-900/90 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-right-10 min-w-[320px] z-[2000]">
+    <div className="flex items-center gap-4 px-6 py-4 rounded-2xl border border-white/10 bg-slate-900/90 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-right-10 min-w-[300px] z-[9999]">
       {icons[toast.type] || icons.info}
       <span className="text-sm font-bold text-white flex-1">{toast.message}</span>
       <button onClick={() => onRemove(toast.id)} className="text-slate-500 hover:text-white transition-colors"><X size={16}/></button>
@@ -66,9 +66,9 @@ const Input = React.forwardRef(({ label, icon: Icon, ...props }: any, ref: any) 
 ));
 
 /**
- * ProductAutocomplete Component - Langsung Ketik, Tidak Perlu Klik Dulu
+ * ProductAutocomplete - Berbasis ketik langsung, navigasi panah, Enter pilih & fokus Qty
  */
-const ProductAutocomplete = ({ products, value, onChange, label, autoFocus = false }: any) => {
+const ProductAutocomplete = ({ products, value, onChange, label, onEnter }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -86,22 +86,25 @@ const ProductAutocomplete = ({ products, value, onChange, label, autoFocus = fal
     ).slice(0, 10);
   }, [products, search, isOpen]);
 
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [search]);
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') setIsOpen(true);
+      return;
+    }
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setIsOpen(true);
       setSelectedIndex(prev => (prev + 1) % (filteredProducts.length || 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedIndex(prev => (prev - 1 + filteredProducts.length) % (filteredProducts.length || 1));
     } else if (e.key === 'Enter') {
-      if (isOpen && filteredProducts.length > 0) {
-        e.preventDefault();
+      e.preventDefault();
+      if (filteredProducts.length > 0) {
         onSelect(filteredProducts[selectedIndex]);
+      } else if (selectedProduct) {
+        setIsOpen(false);
+        onEnter && onEnter();
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false);
@@ -112,6 +115,8 @@ const ProductAutocomplete = ({ products, value, onChange, label, autoFocus = fal
     onChange(p);
     setSearch('');
     setIsOpen(false);
+    // Callback onEnter dipanggil setelah state berubah jika diperlukan, tapi biasanya fokus ditangani di parent
+    onEnter && onEnter();
   };
 
   useEffect(() => {
@@ -131,9 +136,8 @@ const ProductAutocomplete = ({ products, value, onChange, label, autoFocus = fal
         <input 
           ref={inputRef}
           type="text"
-          autoFocus={autoFocus}
-          placeholder={selectedProduct ? `${selectedProduct.kode} - ${selectedProduct.nama}` : "Ketik SKU atau Nama Barang..."}
-          className={`w-full bg-slate-900/50 border border-white/10 rounded-xl py-3 px-4 text-slate-100 placeholder:text-slate-700 focus:outline-none focus:border-blue-500 transition-all ${selectedProduct ? 'placeholder:text-blue-400 font-bold' : ''}`}
+          placeholder={selectedProduct ? `${selectedProduct.kode} - ${selectedProduct.nama}` : "Ketik SKU atau Nama..."}
+          className={`w-full bg-slate-900/50 border border-white/10 rounded-xl py-3 px-4 text-slate-100 focus:outline-none focus:border-blue-500 transition-all ${selectedProduct ? 'placeholder:text-blue-400 font-bold' : 'placeholder:text-slate-700'}`}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setIsOpen(true); }}
           onFocus={() => setIsOpen(true)}
@@ -154,9 +158,9 @@ const ProductAutocomplete = ({ products, value, onChange, label, autoFocus = fal
               >
                 <div className="flex flex-col">
                   <span className={`text-[9px] font-black uppercase ${selectedIndex === idx ? 'text-blue-100' : 'text-blue-400'}`}>{p.kode}</span>
-                  <span className="text-xs font-bold leading-tight">{p.nama}</span>
+                  <span className="text-xs font-bold">{p.nama}</span>
                 </div>
-                {selectedIndex === idx && <ArrowRight size={14} className="text-white/40" />}
+                {selectedIndex === idx && <ArrowRight size={14} className="text-white/50" />}
               </div>
             ))}
           </div>
@@ -206,24 +210,24 @@ function DashboardView({ stock, products, transactions, insights }: any) {
     <div className="space-y-6 animate-in fade-in duration-700">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card title="Stok Gudang" icon={Box} subtitle="Volume Total"><div className="text-3xl font-black">{totalUnits.toLocaleString()} <span className="text-[10px] opacity-40 uppercase">Pcs</span></div></Card>
-        <Card title="Stok Kritis" icon={AlertTriangle} subtitle="Dibawah Minimum"><div className="text-3xl font-black text-rose-500">{lowStock.length} <span className="text-[10px] opacity-40 uppercase">SKU</span></div></Card>
+        <Card title="Stok Kritis" icon={AlertTriangle} subtitle="Di Bawah Minimum"><div className="text-3xl font-black text-rose-500">{lowStock.length} <span className="text-[10px] opacity-40 uppercase">SKU</span></div></Card>
         <Card title="Audit Trailing" icon={Activity} subtitle="Total Record"><div className="text-3xl font-black text-blue-500">{transactions.length} <span className="text-[10px] opacity-40 uppercase">Item</span></div></Card>
         <Card title="AI Analyst" icon={TrendingUp} subtitle="Sistem Intelijen"><Badge variant="success">Online</Badge></Card>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card title="Wawasan Intelijen AI" icon={Sparkles} className="border-blue-500/20 bg-blue-500/[0.02]">
+          <Card title="Wawasan AI" icon={Sparkles} className="border-blue-500/20 bg-blue-500/[0.02]">
             <p className="text-sm leading-relaxed text-slate-300 italic opacity-90">{insights || "Menganalisis data gudang Anda..."}</p>
           </Card>
-          <Card title="Peringatan Restock Segera" icon={AlertTriangle}>
+          <Card title="Item Perlu Restock" icon={AlertTriangle}>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-[10px] font-black uppercase text-slate-500 border-b border-white/5">
-                  <tr><th className="p-4">Nama Barang</th><th className="p-4 text-right">Stok</th><th className="p-4 text-right">Min</th><th className="p-4 text-center">Status</th></tr>
+                  <tr><th className="p-4">Barang</th><th className="p-4 text-right">Stok</th><th className="p-4 text-right">Min</th><th className="p-4 text-center">Status</th></tr>
                 </thead>
                 <tbody>
                   {lowStock.length === 0 ? (
-                    <tr><td colSpan={4} className="p-12 text-center text-slate-600 italic">Level stok aman. Tidak ada peringatan kritis.</td></tr>
+                    <tr><td colSpan={4} className="p-12 text-center text-slate-600 italic">Level stok aman.</td></tr>
                   ) : lowStock.map((p: Product) => (
                     <tr key={p.kode} className="border-b border-white/5 hover:bg-rose-500/[0.02] transition-colors">
                       <td className="p-4 font-bold text-slate-200">{p.nama}</td>
@@ -237,10 +241,10 @@ function DashboardView({ stock, products, transactions, insights }: any) {
             </div>
           </Card>
         </div>
-        <Card title="Aktivitas Terkini" icon={History}>
+        <Card title="Aktivitas Terbaru" icon={History}>
           <div className="space-y-3">
             {transactions.slice(-10).reverse().map((t: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/5 hover:border-blue-500/30 transition-all group">
+              <div key={idx} className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/5 hover:border-blue-500/30 transition-all">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${t.jenis === 'MASUK' ? 'bg-emerald-500/20 text-emerald-400' : t.jenis === 'KELUAR' ? 'bg-rose-500/20 text-rose-400' : 'bg-blue-500/20 text-blue-400'}`}>
                   {t.jenis === 'MASUK' ? <Plus size={18}/> : t.jenis === 'KELUAR' ? <PackageMinus size={18}/> : <ClipboardCheck size={18} />}
                 </div>
@@ -289,7 +293,7 @@ function ChatView() {
 
   return (
     <div className="h-[calc(100vh-180px)] flex flex-col gap-4 max-w-5xl mx-auto">
-      <Card title="Wareflow AI Intelligence" icon={MessageCircle} subtitle="Asisten Cerdas Anda" className="flex-1 flex flex-col min-h-0 overflow-hidden relative border-blue-500/10 shadow-2xl">
+      <Card title="Wareflow AI Intelligence" icon={MessageCircle} subtitle="Asisten Virtual Logistik" className="flex-1 flex flex-col min-h-0 overflow-hidden relative border-blue-500/10 shadow-2xl">
         <button onClick={() => setMessages([])} className="absolute top-6 right-8 p-2 text-slate-700 hover:text-rose-500 transition-colors" title="Bersihkan Chat"><RotateCcw size={18} /></button>
         <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar">
           {messages.length === 0 && (
@@ -321,9 +325,9 @@ function ChatView() {
             value={input} 
             onChange={(e: any) => setInput(e.target.value)} 
             disabled={loading} 
-            className="flex-1 bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-4 text-slate-100 placeholder:text-slate-700 focus:outline-none focus:border-blue-500 transition-all shadow-inner"
+            className="flex-1 bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-4 text-slate-100 focus:outline-none focus:border-blue-500 transition-all shadow-inner"
           />
-          <Button type="submit" disabled={loading || !input.trim()} className="h-14 w-14 !rounded-2xl shrink-0 shadow-2xl"><Send size={20}/></Button>
+          <Button type="submit" disabled={loading || !input.trim()} className="h-14 w-14 !rounded-2xl shrink-0"><Send size={20}/></Button>
         </form>
       </Card>
     </div>
@@ -354,7 +358,7 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
 
     const qtyNum = parseFloat(formData.qty);
     if (isNaN(qtyNum) || qtyNum <= 0) {
-      toast('Jumlah harus lebih dari 0', 'error');
+      toast('Jumlah harus valid', 'error');
       return;
     }
 
@@ -379,7 +383,7 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
       noPO: formData.noPO
     });
 
-    toast(`Transaksi ${type} ${formData.kode} berhasil disimpan`, 'success');
+    toast(`Transaksi ${type} berhasil disimpan`, 'success');
     setFormData({ kode: '', qty: '', satuan: '', supplier: '', noSJ: '', noPO: '', keterangan: '' });
     refresh();
   };
@@ -403,14 +407,13 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
       <Card title={`FORM TRANSAKSI ${type}`} icon={type === 'MASUK' ? PackagePlus : type === 'KELUAR' ? PackageMinus : ClipboardCheck} subtitle="Entri Data Presisi" className="shadow-2xl !bg-slate-950/40">
         <form onSubmit={handleSubmit} className="space-y-10 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-            {/* Kolom Kiri: Utama */}
             <div className="space-y-8">
               <ProductAutocomplete 
-                label="Pilih Barang (Langsung Ketik SKU / Nama) *" 
+                label="Cari Barang (Ketik SKU / Nama) *" 
                 products={products} 
                 value={formData.kode} 
                 onChange={handleProductSelect} 
-                autoFocus={true}
+                onEnter={() => qtyRef.current?.focus()}
               />
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -458,7 +461,6 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
               )}
             </div>
 
-            {/* Kolom Kanan: Detail */}
             <div className="space-y-8">
               {type === 'MASUK' && (
                 <>
@@ -479,7 +481,7 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
                   </div>
                 </>
               )}
-              <Input label="Catatan / Keterangan" placeholder="Ketik catatan tambahan di sini..." value={formData.keterangan} onChange={(e:any) => setFormData({...formData, keterangan: e.target.value})} />
+              <Input label="Catatan / Keterangan" placeholder="Catatan tambahan..." value={formData.keterangan} onChange={(e:any) => setFormData({...formData, keterangan: e.target.value})} />
             </div>
           </div>
           
@@ -495,12 +497,12 @@ function TransactionView({ type, products, suppliers, stock, user, refresh, toas
         </form>
       </Card>
 
-      <Card title="Baru Saja Diproses" icon={History} subtitle={`Log Operasional ${type}`}>
+      <Card title="Data Terakhir" icon={History} subtitle={`History ${type}`}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {recentEntries.length === 0 ? (
-            <div className="col-span-full py-16 text-center text-slate-700 italic text-sm">Belum ada aktivitas baru tercatat.</div>
+            <div className="col-span-full py-16 text-center text-slate-700 italic text-sm">Belum ada transaksi hari ini.</div>
           ) : recentEntries.map((t: any, idx: number) => (
-            <div key={idx} className="flex flex-col p-5 rounded-3xl bg-white/5 border border-white/10 group hover:border-blue-500/40 transition-all animate-in slide-in-from-bottom-4 duration-500">
+            <div key={idx} className="flex flex-col p-5 rounded-3xl bg-white/5 border border-white/10 group hover:border-blue-500/40 transition-all">
               <div className="flex justify-between items-start mb-3">
                 <Badge variant={t.jenis === 'MASUK' ? 'success' : 'danger'}>{t.jenis}</Badge>
                 <span className="text-[10px] font-bold text-slate-500">{t.waktu}</span>
@@ -537,25 +539,25 @@ function HistoryView({ transactions, products, toast }: any) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div><h3 className="text-2xl font-black uppercase tracking-tighter text-white">Log Audit & Riwayat</h3><p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Found {filtered.length} total records</p></div>
+        <div><h3 className="text-2xl font-black uppercase tracking-tighter text-white">Log Audit Gudang</h3><p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Found {filtered.length} total records</p></div>
         <div className="flex gap-3 w-full md:w-auto">
-          <Button variant="ghost" onClick={() => setIsAdvancedVisible(!isAdvancedVisible)}><FilterIcon size={18}/> {isAdvancedVisible ? 'Sembunyikan' : 'Filter Lanjut'}</Button>
+          <Button variant="ghost" onClick={() => setIsAdvancedVisible(!isAdvancedVisible)}><FilterIcon size={18}/> Filter</Button>
           <Button variant="ghost" onClick={() => {}}><FileDown size={18}/> Export CSV</Button>
         </div>
       </div>
 
       <div className={`overflow-hidden transition-all duration-300 ${isAdvancedVisible ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
-        <Card title="Panel Kontrol Filter" icon={FilterIcon} className="!bg-white/[0.03]">
+        <Card title="Panel Filter" icon={FilterIcon} className="!bg-white/[0.03]">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="space-y-6">
-              <Input label="Pencarian Bebas" placeholder="Cari apapun..." icon={Search} value={filter.search} onChange={(e:any) => setFilter({...filter, search: e.target.value})} />
-              <div className="w-full"><label className="block text-[10px] uppercase font-black text-slate-500 mb-2 ml-1">Jenis Transaksi</label><select className="w-full bg-slate-900/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-black uppercase text-slate-200" value={filter.type} onChange={(e) => setFilter({...filter, type: e.target.value})}><option value="">SEMUA JENIS</option><option value="MASUK">MASUK</option><option value="KELUAR">KELUAR</option><option value="OPNAME">OPNAME</option></select></div>
+              <Input label="Pencarian" placeholder="SKU / Nama / Notes..." icon={Search} value={filter.search} onChange={(e:any) => setFilter({...filter, search: e.target.value})} />
+              <div className="w-full"><label className="block text-[10px] uppercase font-black text-slate-500 mb-2 ml-1">Jenis</label><select className="w-full bg-slate-900/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-black uppercase text-slate-200" value={filter.type} onChange={(e) => setFilter({...filter, type: e.target.value})}><option value="">SEMUA JENIS</option><option value="MASUK">MASUK</option><option value="KELUAR">KELUAR</option><option value="OPNAME">OPNAME</option></select></div>
             </div>
             <div className="space-y-6">
-              <ProductAutocomplete label="Spesifik Kode SKU" products={products} value={filter.kode} onChange={(p:any) => setFilter({...filter, kode: p ? p.kode : ''})} />
+              <ProductAutocomplete label="Spesifik SKU" products={products} value={filter.kode} onChange={(p:any) => setFilter({...filter, kode: p ? p.kode : ''})} />
               <div className="grid grid-cols-2 gap-4"><Input label="Dari" type="date" value={filter.startDate} onChange={(e:any)=>setFilter({...filter, startDate: e.target.value})} icon={Calendar} /><Input label="Sampai" type="date" value={filter.endDate} onChange={(e:any)=>setFilter({...filter, endDate: e.target.value})} icon={Calendar} /></div>
             </div>
-            <div className="flex flex-col justify-end pb-1"><Button onClick={() => setFilter(INITIAL_FILTER)} variant="ghost" className="w-full text-rose-500 border-rose-500/10"><RotateCcw size={16}/> Reset Semua</Button></div>
+            <div className="flex flex-col justify-end pb-1"><Button onClick={() => setFilter(INITIAL_FILTER)} variant="ghost" className="w-full"><RotateCcw size={16}/> Reset</Button></div>
           </div>
         </Card>
       </div>
@@ -564,19 +566,19 @@ function HistoryView({ transactions, products, toast }: any) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-[10px] text-slate-500 font-black uppercase border-b border-white/5 bg-white/[0.02] tracking-widest">
-              <tr><th className="p-5">Waktu</th><th className="p-5">Tipe</th><th className="p-5">Barang</th><th className="p-5 text-right">Volume</th><th className="p-5">Operator</th><th className="p-5">Catatan</th></tr>
+              <tr><th className="p-5">Waktu</th><th className="p-5">Tipe</th><th className="p-5">Barang</th><th className="p-5 text-right">Volume</th><th className="p-5">User</th><th className="p-5">Notes</th></tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="p-24 text-center opacity-20"><Search size={64} className="mx-auto mb-6"/><p className="text-lg font-black uppercase tracking-widest">Data Tidak Ditemukan</p></td></tr>
+                <tr><td colSpan={6} className="p-24 text-center opacity-20"><Search size={64} className="mx-auto mb-6"/><p className="text-lg font-black uppercase tracking-widest">Data Kosong</p></td></tr>
               ) : filtered.map((t: any) => (
-                <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.01] transition-all group">
+                <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.01] transition-all">
                   <td className="p-5 font-bold text-slate-300 text-xs">{t.tgl}<br/><span className="text-[10px] opacity-40 font-medium">{t.waktu}</span></td>
                   <td className="p-5"><Badge variant={t.jenis === 'MASUK' ? 'success' : t.jenis === 'KELUAR' ? 'danger' : t.jenis === 'AWAL' ? 'purple' : 'info'}>{t.jenis}</Badge></td>
                   <td className="p-5"><p className="font-black text-blue-400 text-[10px] tracking-widest mb-0.5">{t.kode}</p><p className="font-bold text-slate-200 truncate max-w-[200px]">{t.nama}</p></td>
                   <td className="p-5 text-right font-black text-base">{t.jenis === 'KELUAR' ? '-' : '+'}{t.displayQty || t.qty} <span className="text-[10px] opacity-40 font-bold">{t.satuan}</span></td>
                   <td className="p-5 text-xs font-bold text-slate-400">{t.user}</td>
-                  <td className="p-5 text-[11px] text-slate-500 italic max-w-[200px] truncate" title={t.keterangan}>{t.keterangan || '-'}</td>
+                  <td className="p-5 text-[11px] text-slate-500 italic max-w-[200px] truncate">{t.keterangan || '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -593,48 +595,41 @@ function SupplierView({ suppliers, refresh, toast }: any) {
     e.preventDefault();
     const payload = { id: modal.editing?.id || `SUP-${Date.now()}`, ...modal.data };
     await warehouseService.saveSupplier(payload);
-    toast(`Supplier ${payload.nama} berhasil disimpan`, 'success');
+    toast(`Supplier ${payload.nama} disimpan`, 'success');
     setModal({ open: false, editing: null, data: {} }); refresh();
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center"><h3 className="text-2xl font-black uppercase tracking-tighter text-white">Database Pihak Ketiga</h3><Button onClick={() => setModal({ open: true, editing: null, data: {} })}><Plus size={18}/> Supplier Baru</Button></div>
+      <div className="flex justify-between items-center"><h3 className="text-2xl font-black uppercase tracking-tighter text-white">Database Supplier</h3><Button onClick={() => setModal({ open: true, editing: null, data: {} })}><Plus size={18}/> Tambah</Button></div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {suppliers.map((s: Supplier) => (
           <Card key={s.id} title={s.nama} icon={Truck} subtitle={s.id}>
             <div className="space-y-4 text-sm py-2">
               <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-3">
                 <p className="font-bold text-slate-200 flex items-center gap-2"><UserIcon size={14} className="text-blue-500"/> {s.pic || '-'}</p>
-                <p className="text-slate-400 text-xs flex items-center gap-2 font-mono"><Search size={14} className="text-blue-500"/> {s.telp || '-'}</p>
-                <p className="text-slate-600 text-[11px] leading-relaxed line-clamp-2">{s.alamat || '-'}</p>
+                <p className="text-slate-400 text-xs flex items-center gap-2 font-mono">{s.telp || '-'}</p>
+                <p className="text-slate-600 text-[11px] line-clamp-2">{s.alamat || '-'}</p>
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button onClick={() => setModal({ open: true, editing: s, data: s })} className="p-2.5 text-blue-400 hover:bg-blue-400/10 rounded-xl transition-all"><Edit2 size={18}/></button>
-                <button onClick={async () => confirm('Hapus supplier ini?') && (await warehouseService.deleteSupplier(s.id), refresh())} className="p-2.5 text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"><Trash2 size={18}/></button>
+                <button onClick={async () => confirm('Hapus supplier?') && (await warehouseService.deleteSupplier(s.id), refresh())} className="p-2.5 text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"><Trash2 size={18}/></button>
               </div>
             </div>
           </Card>
         ))}
       </div>
       {modal.open && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[2000] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
-          <Card className="w-full max-w-lg shadow-2xl border-white/10" title={modal.editing ? "Update Data Supplier" : "Registrasi Supplier"}>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[9999] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+          <Card className="w-full max-w-lg shadow-2xl border-white/10" title={modal.editing ? "Update Supplier" : "Supplier Baru"}>
             <form onSubmit={handleSubmit} className="space-y-6">
               <Input label="Nama Perusahaan *" value={modal.data.nama || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, nama: e.target.value}})} required />
               <div className="grid grid-cols-2 gap-6">
-                <Input label="Kontak PIC" value={modal.data.pic || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, pic: e.target.value}})} />
-                <Input label="No. Telp" value={modal.data.telp || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, telp: e.target.value}})} />
+                <Input label="PIC" value={modal.data.pic || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, pic: e.target.value}})} />
+                <Input label="Telepon" value={modal.data.telp || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, telp: e.target.value}})} />
               </div>
-              <div className="w-full">
-                <label className="block text-[10px] uppercase font-black text-slate-400 mb-2 ml-1 tracking-widest">Alamat Lengkap</label>
-                <textarea 
-                  className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500 min-h-[120px]"
-                  value={modal.data.alamat || ''}
-                  onChange={(e:any)=>setModal({...modal, data: {...modal.data, alamat: e.target.value}})}
-                />
-              </div>
-              <div className="flex justify-end gap-4 pt-6"><button type="button" onClick={() => setModal({ open: false, editing: null, data: {} })} className="text-slate-600 font-black px-4 text-xs uppercase tracking-widest hover:text-white transition-all">Batal</button><Button type="submit" variant="success" className="px-8">Simpan Database</Button></div>
+              <Input label="Alamat" value={modal.data.alamat || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, alamat: e.target.value}})} />
+              <div className="flex justify-end gap-4 pt-6"><button type="button" onClick={() => setModal({ open: false, editing: null, data: {} })} className="text-slate-600 font-black px-4 text-xs uppercase hover:text-white transition-all">Batal</button><Button type="submit" variant="success" className="px-8">Simpan</Button></div>
             </form>
           </Card>
         </div>
@@ -651,13 +646,13 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
   const saveUser = async (e: any) => {
     e.preventDefault();
     await warehouseService.saveUser(modal.data, modal.data.newPassword);
-    toast(`Pengguna ${modal.data.username} diperbarui`, 'success'); setModal({ open: false, editing: null, data: {} }); refresh();
+    toast(`Pengguna diperbarui`, 'success'); setModal({ open: false, editing: null, data: {} }); refresh();
   };
 
   const saveSku = async (e: any) => {
     e.preventDefault();
     await warehouseService.saveProduct({ ...modal.data, minStok: Number(modal.data.minStok || 0), stokAwal: Number(modal.data.stokAwal || 0) });
-    toast(`Master SKU ${modal.data.kode} diperbarui`, 'success'); setModal({ open: false, editing: null, data: {} }); refresh();
+    toast(`SKU diperbarui`, 'success'); setModal({ open: false, editing: null, data: {} }); refresh();
   };
 
   return (
@@ -668,13 +663,13 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
         ))}
       </div>
       {subTab === 'cloud' && (
-        <Card title="Cloud Database Integration" icon={LinkIcon} subtitle="Integrasi Google Sheets"><div className="space-y-8 py-4"><Input label="GAS Web App URL (Deployment ID)" value={gasUrl} onChange={(e:any)=>setGasUrl(e.target.value)} placeholder="https://script.google.com/macros/s/..." /><Button variant="success" onClick={() => { warehouseService.setBackendUrl(gasUrl); toast("Sinkronisasi Cloud Aktif", "success"); refresh(); }} className="h-14 w-full md:w-auto px-10"><Save size={18}/> Hubungkan Sistem</Button></div></Card>
+        <Card title="Google Sheets Sync" icon={LinkIcon} subtitle="Integrasi Database Cloud"><div className="space-y-8 py-4"><Input label="GAS Web App URL" value={gasUrl} onChange={(e:any)=>setGasUrl(e.target.value)} placeholder="https://script.google.com/..." /><Button variant="success" onClick={() => { warehouseService.setBackendUrl(gasUrl); toast("Konfigurasi Tersimpan", "success"); refresh(); }} className="h-14 w-full md:w-auto px-10"><Save size={18}/> Hubungkan Sistem</Button></div></Card>
       )}
       {subTab === 'users' && (
-        <Card title="Akses & Otoritas" icon={UserIcon}>
-          <div className="flex justify-end mb-4"><Button onClick={() => setModal({ open: true, editing: null, data: {role:'STAFF', active:true} })}><Plus size={18}/> Tambah Akses</Button></div>
+        <Card title="Pengguna Sistem" icon={UserIcon}>
+          <div className="flex justify-end mb-4"><Button onClick={() => setModal({ open: true, editing: null, data: {role:'STAFF', active:true} })}><Plus size={18}/> User Baru</Button></div>
           <table className="w-full text-left text-sm">
-            <thead className="text-[10px] text-slate-500 font-black uppercase border-b border-white/5 tracking-widest"><tr><th className="p-5">Pengguna</th><th className="p-5">Level</th><th className="p-5 text-right">Aksi</th></tr></thead>
+            <thead className="text-[10px] text-slate-500 font-black uppercase border-b border-white/5 tracking-widest"><tr><th className="p-5">Username</th><th className="p-5">Otoritas</th><th className="p-5 text-right">Aksi</th></tr></thead>
             <tbody>
               {warehouseService.getUsers().map(u => (
                 <tr key={u.username} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"><td className="p-5 font-black text-slate-200">{u.username}</td><td className="p-5"><Badge variant={u.role==='ADMIN'?'danger':'info'}>{u.role}</Badge></td><td className="p-5 text-right flex justify-end gap-3"><button onClick={() => setModal({ open: true, editing: u, data: { ...u } })} className="p-2.5 text-blue-400 hover:bg-blue-400/10 rounded-xl"><Edit2 size={18}/></button></td></tr>
@@ -684,10 +679,10 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
         </Card>
       )}
       {subTab === 'skus' && (
-        <Card title="Inventory Master Database" icon={Database}>
+        <Card title="Data Master SKU" icon={Database}>
           <div className="flex justify-end mb-4"><Button onClick={() => setModal({ open: true, editing: null, data: {satuanDefault:'PCS', minStok:10, stokAwal:0} })}><Plus size={18}/> SKU Baru</Button></div>
           <table className="w-full text-left text-sm">
-            <thead className="text-[10px] text-slate-500 font-black uppercase border-b border-white/5 tracking-widest"><tr><th className="p-5">SKU ID</th><th className="p-5">Deskripsi Barang</th><th className="p-5 text-right">Aksi</th></tr></thead>
+            <thead className="text-[10px] text-slate-500 font-black uppercase border-b border-white/5 tracking-widest"><tr><th className="p-5">ID</th><th className="p-5">Deskripsi</th><th className="p-5 text-right">Aksi</th></tr></thead>
             <tbody>
               {products.map((p: Product) => (
                 <tr key={p.kode} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"><td className="p-5 font-mono text-blue-400 font-bold tracking-widest">{p.kode}</td><td className="p-5 font-bold text-slate-200">{p.nama}</td><td className="p-5 text-right flex justify-end gap-3"><button onClick={() => setModal({ open: true, editing: p, data: { ...p } })} className="p-2.5 text-blue-400 hover:bg-blue-400/10 rounded-xl"><Edit2 size={18}/></button></td></tr>
@@ -697,24 +692,24 @@ function AdminView({ refresh, currentUser, toast, products }: any) {
         </Card>
       )}
       {modal.open && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-2xl z-[2000] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-2xl z-[9999] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
           <Card className="w-full max-w-xl shadow-2xl border-white/10" title={modal.editing ? `Edit ${subTab === 'users' ? 'User' : 'SKU'}` : `Tambah ${subTab === 'users' ? 'User' : 'SKU'}`}>
             <form onSubmit={subTab === 'users' ? saveUser : saveSku} className="space-y-6">
               {subTab === 'users' ? (
                 <>
                   <Input label="Username" value={modal.data.username || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, username: e.target.value}})} required disabled={!!modal.editing} />
-                  <Input label="Kata Sandi" type="password" value={modal.data.newPassword || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, newPassword: e.target.value}})} required={!modal.editing} />
-                  <div className="w-full"><label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">Otoritas</label><select className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-slate-200 focus:outline-none" value={modal.data.role} onChange={(e:any)=>setModal({...modal, data: {...modal.data, role: e.target.value}})}><option value="STAFF">STAFF (OPERATOR)</option><option value="ADMIN">ADMIN (FULL ACCESS)</option><option value="VIEWER">VIEWER (READ ONLY)</option></select></div>
+                  <Input label="Password" type="password" value={modal.data.newPassword || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, newPassword: e.target.value}})} required={!modal.editing} />
+                  <div className="w-full"><label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">Role</label><select className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-slate-200 focus:outline-none" value={modal.data.role} onChange={(e:any)=>setModal({...modal, data: {...modal.data, role: e.target.value}})}><option value="STAFF">STAFF</option><option value="ADMIN">ADMIN</option></select></div>
                 </>
               ) : (
                 <>
                   <Input label="Kode SKU *" value={modal.data.kode || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, kode: e.target.value}})} required disabled={!!modal.editing} />
-                  <Input label="Nama Lengkap Barang *" value={modal.data.nama || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, nama: e.target.value}})} required />
-                  <div className="grid grid-cols-2 gap-6"><Input label="Satuan Dasar *" value={modal.data.satuanDefault || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, satuanDefault: e.target.value}})} required /><Input label="Minimum Safety Stok *" type="number" value={modal.data.minStok || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, minStok: e.target.value}})} required /></div>
-                  <Input label="Saldo Awal Inventaris" type="number" value={modal.data.stokAwal || 0} onChange={(e:any)=>setModal({...modal, data: {...modal.data, stokAwal: e.target.value}})} />
+                  <Input label="Nama Lengkap *" value={modal.data.nama || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, nama: e.target.value}})} required />
+                  <div className="grid grid-cols-2 gap-4"><Input label="Satuan Dasar *" value={modal.data.satuanDefault || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, satuanDefault: e.target.value}})} required /><Input label="Min Stok *" type="number" value={modal.data.minStok || ''} onChange={(e:any)=>setModal({...modal, data: {...modal.data, minStok: e.target.value}})} required /></div>
+                  <Input label="Stok Awal" type="number" value={modal.data.stokAwal || 0} onChange={(e:any)=>setModal({...modal, data: {...modal.data, stokAwal: e.target.value}})} />
                 </>
               )}
-              <div className="flex justify-end gap-4 pt-6"><button type="button" onClick={() => setModal({ open: false, editing: null, data: {} })} className="text-slate-600 font-black px-4 text-xs uppercase tracking-widest hover:text-white transition-all">Batal</button><Button type="submit" variant="success" className="px-10">Simpan Data</Button></div>
+              <div className="flex justify-end gap-4 pt-6"><button type="button" onClick={() => setModal({ open: false, editing: null, data: {} })} className="text-slate-600 font-black px-4 text-xs uppercase tracking-widest hover:text-white transition-all">Batal</button><Button type="submit" variant="success" className="px-10">Simpan</Button></div>
             </form>
           </Card>
         </div>
@@ -750,7 +745,7 @@ export default function App() {
       setSuppliers(warehouseService.getSuppliers());
       setTransactions(warehouseService.getTransactions());
       setStock(warehouseService.getStockState());
-      if (success) showToast('Database Cloud Sinkron', 'success');
+      if (success) showToast('Database Sinkron', 'success');
     } catch (e) {
       console.error(e);
       showToast('Gagal sinkron data cloud', 'error');
@@ -776,44 +771,40 @@ export default function App() {
     const u = e.target.username.value;
     const p = e.target.password.value;
     
-    try {
-      const users = warehouseService.getUsers();
-      const found = users.find(x => x.username === u);
-      
-      if (found && found.active) {
-        const hashed = await warehouseService.hashPassword(p);
-        if (hashed === found.password) {
-          setUser(found);
-          localStorage.setItem('wareflow_session', JSON.stringify(found));
-          showToast(`Sesi Aktif: ${found.username}`, 'success');
-        } else {
-          showToast('Kata sandi salah.', 'error');
-        }
+    // Pastikan memanggil getUsers untuk mendapatkan data terbaru
+    const users = warehouseService.getUsers();
+    const found = users.find(x => x.username === u);
+    
+    if (found && found.active) {
+      const hashed = await warehouseService.hashPassword(p);
+      if (hashed === found.password) {
+        setUser(found);
+        localStorage.setItem('wareflow_session', JSON.stringify(found));
+        showToast(`Selamat datang, ${found.username}`, 'success');
       } else {
-        showToast('Pengguna tidak ditemukan atau nonaktif.', 'error');
+        showToast('Password tidak cocok.', 'error');
       }
-    } catch (err) {
-      console.error(err);
-      showToast('Gagal melakukan autentikasi sistem.', 'error');
+    } else {
+      showToast('User tidak ditemukan atau nonaktif.', 'error');
     }
   };
 
   if (!user) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#070b14] p-6 bg-main overflow-hidden">
-        <Card className="w-full max-w-md p-12 !border-white/5 animate-in fade-in zoom-in-95 duration-500 shadow-2xl">
+        <Card className="w-full max-w-md p-12 !border-white/5 animate-in fade-in zoom-in-95 duration-500 shadow-2xl relative">
           <div className="flex flex-col items-center mb-10">
             <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center shadow-2xl mb-8 shadow-blue-500/30 animate-pulse"><PackagePlus size={48} className="text-white" /></div>
             <h1 className="text-4xl font-black tracking-tighter text-white italic">WAREFLOW</h1>
-            <p className="text-[10px] uppercase font-black text-slate-600 tracking-[0.4em] mt-3">Advanced Warehouse Control</p>
+            <p className="text-[10px] uppercase font-black text-slate-600 tracking-[0.4em] mt-3">Enterprise Access System</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-8">
-            <Input label="Username" name="username" required autoComplete="username" />
+            <Input label="Username" name="username" required autoComplete="username" defaultValue="admin" />
             <Input label="Password" type="password" name="password" required autoComplete="current-password" />
             <Button className="w-full h-16 tracking-[0.2em] font-black text-sm" type="submit">LOGIN SECURE</Button>
             <div className="flex justify-between px-1">
-               <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">Internal Access</p>
-               <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">v1.2.5</p>
+               <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">Internal Use Only</p>
+               <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest">v1.2.6</p>
             </div>
           </form>
         </Card>
@@ -826,7 +817,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[#070b14] text-slate-200 overflow-hidden bg-main">
-      <div className="fixed bottom-8 right-8 flex flex-col gap-4 z-[3000]">
+      <div className="fixed bottom-8 right-8 flex flex-col gap-4 z-[9999]">
         {toasts.map(t => <ToastItem key={t.id} toast={t} onRemove={(id:string)=>setToasts(toasts.filter(x=>x.id!==id))} />)}
       </div>
 

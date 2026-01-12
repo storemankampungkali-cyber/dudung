@@ -19,10 +19,14 @@ export class GeminiService {
       const stockSummary = products.slice(0, 10).map(p => `${p.nama}: Current=${stock[p.kode] || 0}, Min=${p.minStok}`).join('\n');
 
       const prompt = `
-        Analisis data gudang ini:
-        STOK: ${stockSummary}
-        TRANSAKSI TERBARU: ${recentTxs}
-        Berikan ringkasan status, item kritis, dan saran tindakan dalam Bahasa Indonesia yang singkat dan profesional.
+        Tugas: Analisis inventaris gudang berikut:
+        RINGKASAN STOK:
+        ${stockSummary}
+
+        TRANSAKSI TERBARU:
+        ${recentTxs}
+
+        Berikan: 1. Status ringkas. 2. Item kritis yang harus dipesan. 3. Saran tindakan cepat. Gunakan Bahasa Indonesia yang sangat profesional dan padat.
       `;
 
       const response = await ai.models.generateContent({
@@ -32,8 +36,8 @@ export class GeminiService {
 
       return response.text;
     } catch (error) {
-      console.error("Gemini Insights Error:", error);
-      return "Wawasan AI tidak tersedia saat ini.";
+      console.error("Gemini Error:", error);
+      return "Wawasan AI saat ini tidak tersedia.";
     }
   }
 
@@ -47,20 +51,19 @@ export class GeminiService {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [
-          ...history,
+          ...history.map(h => ({ role: h.role, parts: h.parts })),
           { role: 'user', parts: [{ text: message }] }
         ],
         config: {
-          systemInstruction: "Anda adalah Wareflow AI, asisten manajemen gudang yang cerdas dan proaktif. Anda membantu pengguna dalam mengelola stok, menganalisis data logistik, dan memberikan solusi administratif. Jawablah dengan nada profesional, ramah, dan solutif dalam Bahasa Indonesia. Anda juga bisa berdiskusi topik umum di luar gudang jika ditanya.",
-          temperature: 0.75,
-          topP: 0.95,
+          systemInstruction: "Anda adalah Wareflow AI, asisten manajemen gudang profesional. Anda cerdas, responsif, dan mampu memberikan solusi logistik yang akurat. Anda berbicara dalam Bahasa Indonesia yang sopan namun efisien. Anda dapat membantu menganalisis stok, memberikan tips manajemen gudang, atau berdiskusi topik umum dengan cerdas.",
+          temperature: 0.7,
         }
       });
 
       return response.text;
     } catch (error) {
       console.error("Gemini Chat Error:", error);
-      return "Maaf, sistem AI sedang sibuk. Silakan coba lagi dalam beberapa saat.";
+      return "Maaf, saya sedang mengalami kendala teknis. Mohon ulangi pesan Anda.";
     }
   }
 }
