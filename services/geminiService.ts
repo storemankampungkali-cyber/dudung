@@ -3,20 +3,17 @@ import { GoogleGenAI } from "@google/genai";
 import { Transaction, Product } from "../types";
 
 export class GeminiService {
-  private getAI() {
-    // Menggunakan try-catch untuk menghindari crash jika process.env tidak ditemukan di browser
-    try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) return null;
-      return new GoogleGenAI({ apiKey });
-    } catch (e) {
-      return null;
-    }
-  }
-
+  /**
+   * Generates inventory insights using Gemini.
+   * Following guidelines:
+   * - Uses GoogleGenAI with named apiKey from process.env.API_KEY.
+   * - Uses gemini-3-flash-preview for text analysis.
+   * - Directly uses ai.models.generateContent.
+   * - Accesses response.text property.
+   */
   async getStockInsights(products: Product[], stock: Record<string, number>, transactions: Transaction[]) {
-    const ai = this.getAI();
-    if (!ai) return "AI Analyst is offline. Please check API Key configuration.";
+    // Initialize right before usage to ensure up-to-date environment variables
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     try {
       const recentTxs = transactions.slice(0, 15).map(t => `${t.tgl} ${t.jenis} ${t.nama} ${t.qty} ${t.satuan}`).join('\n');
@@ -29,11 +26,13 @@ export class GeminiService {
         Provide: 1. Status summary. 2. Critical items. 3. Reorder suggestions. Brief and professional.
       `;
 
+      // Correct way to call generateContent according to guidelines
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
 
+      // Directly access .text property as per guidelines
       return response.text;
     } catch (error) {
       console.error("Gemini Error:", error);
