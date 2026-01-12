@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Wareflow MLASS - Warehouse Management System",
+  "description": "A high-performance, glassmorphism-styled warehouse management system featuring real-time stock tracking, RBAC, transaction history, and AI-powered stock insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
